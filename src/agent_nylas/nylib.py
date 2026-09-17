@@ -431,17 +431,19 @@ def dwidth(text: str) -> int:
     return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in text)
 
 
-def html_to_text(text: str | None) -> str:
+def html_to_text(text: str | None, keep_blank_lines: bool = False) -> str:
     """Render provider HTML (Outlook event descriptions) as plain text.
 
     The stdlib parser (rather than a regex) leaves a plain-text description be,
     including a bare "a < b", and drops the text of style/script elements, so
-    what reaches the table is what a reader of the HTML would see.
+    what reaches the table is what a reader of the HTML would see. Blank lines
+    are collapsed by default (a table cell wants that); keep_blank_lines=True
+    keeps them, which is what makes paragraphs readable in a full message body.
     """
     parser = _HtmlText()
     parser.feed(text or "")
     parser.close()
-    return parser.text()
+    return parser.text(keep_blank_lines=keep_blank_lines)
 
 
 class _HtmlText(HTMLParser):
@@ -471,9 +473,11 @@ class _HtmlText(HTMLParser):
         if not self._skipping:
             self._parts.append(data)
 
-    def text(self) -> str:
-        """Collapse runs of whitespace and the blank lines they leave behind."""
+    def text(self, keep_blank_lines: bool = False) -> str:
+        """Collapse runs of whitespace, and the blank lines they leave behind."""
         lines = [" ".join(line.split()) for line in "".join(self._parts).splitlines()]
+        if keep_blank_lines:
+            return "\n".join(lines).strip("\n")
         return "\n".join(line for line in lines if line)
 
 
@@ -533,6 +537,34 @@ def wrap(text: str | None, width: int) -> list[str]:
     if line:
         lines.append(line)
     return lines
+
+
+def prefixes(labels: Iterable[str], indent: str = "") -> dict[str, str]:
+    """Padded "Label:" prefixes for a view's detail fields.
+
+    Every label is padded to the widest of them plus its colon and one space, so
+    all values start in the same column and a wrapped value keeps that column.
+    Views own their label set and indent; this is the one place that decides how
+    the column is computed.
+    """
+    width = max(len(label) for label in labels) + 2
+    return {label: f"{indent}{label + ':':<{width}}" for label in labels}
+
+
+def hanging(prefix: str, text: str | None, width: int) -> list[str]:
+    """Lines of one labelled block: text after `prefix`, continuations aligned to it.
+
+    Used for the detail fields of both views, so every value starts in the same
+    column and a wrapped value keeps that column instead of falling back to the
+    label. An empty value yields no lines at all, which keeps an absent field
+    from printing its label with nothing after it.
+    """
+    value = (text or "").strip()
+    if not value:
+        return []
+    lines = wrap(value, max(20, width - len(prefix)))
+    padding = " " * len(prefix)
+    return [f"{prefix}{lines[0]}"] + [f"{padding}{line}" for line in lines[1:]]
 
 
 def pad(text: str | None, width: int, *, truncate: bool = True) -> str:

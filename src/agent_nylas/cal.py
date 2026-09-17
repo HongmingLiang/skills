@@ -73,7 +73,7 @@ DETAIL_INDENT = " " * 8  # detail labels sit under the date/time line
 # Labels are padded to the widest one plus its colon, so every value starts in
 # the same column and wrapped continuations line up with those values.
 LABELS = ("Title", "Location", "Description", "ID")
-LABEL_WIDTH = max(len(label) for label in LABELS) + 2
+PREFIX = nylib.prefixes(LABELS, DETAIL_INDENT)
 
 
 class EventRow(TypedDict):
@@ -521,22 +521,6 @@ def public_row(row: EventRow) -> dict[str, Any]:
     }
 
 
-def detail(label: str, text: str | None, width: int) -> list[str]:
-    """One labelled detail block, wrapped under a hanging indent.
-
-    Labels are padded to the widest of them (Description), so the value column
-    starts at the same place on every line and wrapped continuations line up
-    with the value rather than the label.
-    """
-    value = (text or "").strip()
-    if not value:
-        return []
-    prefix = f"{DETAIL_INDENT}{label + ':':<{LABEL_WIDTH}}"
-    lines = nylib.wrap(value, max(20, width - len(prefix)))
-    hanging = " " * len(prefix)
-    return [f"{prefix}{lines[0]}"] + [f"{hanging}{line}" for line in lines[1:]]
-
-
 def print_account(report: AccountReport, opts: Options, term_width: int) -> None:
     """Render one account's events as a plain-text block."""
     print(
@@ -561,12 +545,16 @@ def print_account(report: AccountReport, opts: Options, term_width: int) -> None
             f" {nylib.pad(time_label(row), TIME_WIDTH)} {row['calendar']}"
         )
         blocks = [
-            detail("Title", status + row["title"] + suffix, term_width),
-            detail("Location", row["location"], term_width),
-            detail("Description", nylib.html_to_text(row["description"]), term_width),
+            nylib.hanging(PREFIX["Title"], status + row["title"] + suffix, term_width),
+            nylib.hanging(PREFIX["Location"], row["location"], term_width),
+            nylib.hanging(
+                PREFIX["Description"],
+                nylib.html_to_text(row["description"]),
+                term_width,
+            ),
         ]
         if opts.ids:
-            blocks.append(detail("ID", row["id"], term_width))
+            blocks.append(nylib.hanging(PREFIX["ID"], row["id"], term_width))
         for block in blocks:
             for line in block:
                 print(line)

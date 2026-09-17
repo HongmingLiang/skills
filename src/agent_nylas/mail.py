@@ -20,6 +20,8 @@ Usage:
 
 Output legend:  U unread   S starred, followed by sender and subject.
 
+See also: ./read.py reads one or more messages in full (./mail.py -j | ./read.py -).
+
 Notes:
   * Folder names match case-insensitively, and a unique substring is enough.
   * A folder missing in one account skips that account only, and the exit code
