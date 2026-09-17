@@ -1,6 +1,6 @@
 #!/usr/bin/env -S uv run
 """
-read -- read-only message reader: one or more messages, in full.
+email_read -- read-only message reader: one or more messages, in full.
 
 Read-only by construction: the only calls this script makes are messages.find
 plus the cached folders.list / grants.list lookups used to name things. It never
@@ -8,22 +8,22 @@ sends, deletes, moves, or marks anything, and it downloads nothing unless
 --save DIR is given.
 
 Usage:
-    ./read.py <id>                      one message, in full
-    ./read.py <id> <id> ...             several messages, fetched concurrently
-    ./read.py - < ids.txt               ids from stdin, whitespace separated
-    ./mail.py -j | ./read.py -          read what a listing just showed
-    ./read.py <id> -a outlook           pin the account instead of auto-detecting
-    ./read.py <id> --save /tmp/att      save the attachments (never overwrites)
-    ./read.py <id> -j                   JSON output: raw HTML body, no rendering
+    ./email_read.py <id>                        one message, in full
+    ./email_read.py <id> <id> ...               several messages, fetched concurrently
+    ./email_read.py - < ids.txt                 ids from stdin, whitespace separated
+    ./email_list.py -j | ./email_read.py -      read what a listing just showed
+    ./email_read.py <id> -a outlook             pin the account instead of auto-detecting
+    ./email_read.py <id> --save /tmp/att        save the attachments (never overwrites)
+    ./email_read.py <id> -j                     JSON output: raw HTML body, no rendering
 
 Reading several messages needs no config file: the ids are the whole input, so
 they are passed as arguments or piped in. `-` accepts plain ids, the JSON that
-mail.py -j prints, or a JSON list, which means a selection is expressed with the
+email_list.py -j prints, or a JSON list, which means a selection is expressed with the
 listing's own filters plus jq (or a shell loop) instead of with a second query
 language implemented here:
 
-    ./mail.py -j --days 3 | ./read.py -
-    ./mail.py -j | jq -r '.accounts[].messages[] | select(.unread) | .id' | ./read.py -
+    ./email_list.py -j --days 3 | ./email_read.py -
+    ./email_list.py -j | jq -r '.accounts[].messages[] | select(.unread) | .id' | ./email_read.py -
 
 Flags apply to the whole run -- none of them has a per-message variant worth a
 schema -- and ids are deduplicated, so piping a listing that repeats one is safe.
@@ -125,7 +125,7 @@ class Options:
 def extract_ids(document: Any) -> list[str]:
     """Message ids from a JSON report, in order.
 
-    Understands the shapes this package prints (mail.py's accounts[].messages and
+    Understands the shapes this package prints (email_list.py's accounts[].messages and
     this script's messages[]), plus a bare list of ids or of message objects, so
     anything jq produces from one of those pipes in unchanged. Raises ValueError
     when the document holds no messages at all, which is the difference between
@@ -424,7 +424,7 @@ def print_message(detail: MessageDetail, term_width: int) -> None:
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse and validate the command line."""
     parser = argparse.ArgumentParser(
-        prog="read",
+        prog="email_read",
         description=(
             "Read-only message reader (never sends, deletes, moves, or marks "
             "mail; downloads nothing unless --save is given)."
@@ -435,7 +435,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "ids",
         nargs="+",
         metavar="ID",
-        help="message id(s) to read; - reads ids (or a mail.py -j report) from stdin",
+        help="message id(s) to read; - reads ids (or a email_list.py -j report) from stdin",
     )
     parser.add_argument(
         "-a",
