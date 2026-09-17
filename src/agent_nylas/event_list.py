@@ -1,23 +1,23 @@
 #!/usr/bin/env -S uv run
 """
-calendar_list -- read-only calendar viewer for the Outlook account, built on the Nylas
+event_list -- read-only event viewer for the Outlook account, built on the Nylas
 Python SDK.
 
 Read-only guarantee: the only API call this script makes is events.list, so it
 never creates, updates, deletes, or answers an event.
 
 Usage:
-    ./calendar_list.py                           every calendar, next 365 days
-    ./calendar_list.py --days 30                 shorter window
-    ./calendar_list.py --since 2026-01-01        window start (default: now)
-    ./calendar_list.py --calendars               list calendars and their ids, read nothing
-    ./calendar_list.py -c Work -c Education      only these calendars
-    ./calendar_list.py --include-cjk             also read the Chinese-named calendars
-    ./calendar_list.py --exclude Event           skip calendars whose name matches
-    ./calendar_list.py --expand                  one row per occurrence, not per series
-    ./calendar_list.py --ids                     print event ids for follow-up CLI actions
-    ./calendar_list.py -j                        JSON output for piping
-    ./calendar_list.py --refresh                 ignore the cached calendar lists
+    ./event_list.py                           every calendar, next 365 days
+    ./event_list.py --days 30                 shorter window
+    ./event_list.py --since 2026-01-01        window start (default: now)
+    ./event_list.py --calendars               list calendars and their ids, read nothing
+    ./event_list.py -c Work -c Education      only these calendars
+    ./event_list.py --include-cjk             also read the Chinese-named calendars
+    ./event_list.py --exclude Event           skip calendars whose name matches
+    ./event_list.py --expand                  one row per occurrence, not per series
+    ./event_list.py --ids                     print event ids for follow-up CLI actions
+    ./event_list.py -j                        JSON output for piping
+    ./event_list.py --refresh                 ignore the cached calendar lists
 
 Scope: only the Microsoft (Outlook) account is read. Other grants are left
 alone unless asked for with -a, and their calendars are out of scope for now.
@@ -564,8 +564,8 @@ def print_account(report: AccountReport, opts: Options, term_width: int) -> None
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse and validate the command line."""
     parser = argparse.ArgumentParser(
-        prog="calendar_list",
-        description="Read-only calendar viewer (never creates, updates, or deletes events).",
+        prog="event_list",
+        description="Read-only event viewer (never creates, updates, or deletes events).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
