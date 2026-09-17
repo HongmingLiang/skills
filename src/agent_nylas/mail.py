@@ -37,14 +37,17 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, TypedDict, cast
 
+import config
 import nylib
 from nylas.models.messages import ListMessagesQueryParams, Message
 
-# Fields requested from the API. Everything else (notably the HTML body) stays
-# on the server, which is where most of the payload saving comes from.
+# Fields this view asks the API for. Everything else (notably the HTML body)
+# stays on the server, which is where most of the payload saving comes from.
+# The projection belongs to the view that needs it, not to the shared config.
 SELECT = "id,grant_id,object,thread_id,subject,from,date,unread,starred,folders"
 
-DEFAULT_LIMIT = 10
+# Table layout is this view's own business, so the widths live here rather than
+# in config.py.
 SENDER_WIDTH = 26
 STAMP_WIDTH = 11
 ID_INDENT = " " * (STAMP_WIDTH + 7)
@@ -91,7 +94,7 @@ class Options:
     """Everything the read path needs, assembled once from the CLI."""
 
     account: str = "all"
-    target: int = DEFAULT_LIMIT
+    target: int = config.DEFAULT_MESSAGE_LIMIT
     filters: Filters = Filters()
     folder: str | None = None
     all_folders: bool = False
@@ -198,7 +201,7 @@ def read_messages(
     Pages are sized per provider (see nylib.page_limit) because Microsoft
     answers a large page far more slowly than Google or IMAP.
     """
-    size = nylib.page_limit(grant.get("provider"))
+    size = config.page_size(grant.get("provider"))
     rows: list[MessageRow] = []
     page_token: str | None = None
     while len(rows) < opts.target:
@@ -291,7 +294,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "-n",
         "--limit",
         type=int,
-        help=f"messages per account (default {DEFAULT_LIMIT})",
+        help=f"messages per account (default {config.DEFAULT_MESSAGE_LIMIT})",
     )
     parser.add_argument(
         "--all",
@@ -301,8 +304,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--max",
         type=int,
-        default=200,
-        help="upper bound per account when --all is used (default 200)",
+        default=config.DEFAULT_MESSAGE_MAX,
+        help=f"upper bound per account when --all is used (default {config.DEFAULT_MESSAGE_MAX})",
     )
     parser.add_argument("-u", "--unread", action="store_true", help="unread only")
     parser.add_argument("-s", "--starred", action="store_true", help="starred only")
@@ -329,8 +332,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--workers",
         type=int,
-        default=nylib.DEFAULT_WORKERS,
-        help=f"concurrent accounts (default {nylib.DEFAULT_WORKERS})",
+        default=config.DEFAULT_WORKERS,
+        help=f"concurrent accounts (default {config.DEFAULT_WORKERS})",
     )
     args = parser.parse_args(argv)
 
@@ -354,7 +357,7 @@ def run(args: argparse.Namespace) -> int:
     nylib.client()  # fail fast: one clean config error instead of one per account
     opts = Options(
         account=args.account,
-        target=args.max if args.all else (args.limit or DEFAULT_LIMIT),
+        target=args.max if args.all else (args.limit or config.DEFAULT_MESSAGE_LIMIT),
         filters=Filters(unread=args.unread, starred=args.starred, days=args.days),
         folder=args.folder,
         all_folders=args.all_folders,

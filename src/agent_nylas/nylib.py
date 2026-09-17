@@ -23,44 +23,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
+import config
 import nylas
 import requests
 import requests.adapters
 import requests.exceptions
 from nylas.handler import http_client as sdk_http
 from nylas.models.errors import NylasApiError, NylasSdkTimeoutError
-
-# --------------------------------------------------------------- configuration
-
-API_KEY_ENV = "NYLAS_FILE_STORE_PASSPHRASE"
-API_URI = os.environ.get("NYLAS_API_URI", "https://api.us.nylas.com")
-
-# Seconds. Measured through a local HTTP proxy: a 50-message Microsoft page
-# needs 5-10s, and a slow proxy handshake can add seconds more.
-REQUEST_TIMEOUT = 60
-
-# Transport failures are retried, because a single flaky connection used to
-# fail a whole account. Safe here only because every call in this package is a
-# read: do not reuse this session for send or delete work without dropping the
-# retry, which would risk duplicate writes.
-RETRY_ATTEMPTS = 3
-RETRY_BACKOFF = 1.0  # seconds, multiplied by the attempt number
-RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
-
-CACHE_TTL = 12 * 60 * 60  # identifier caches are considered fresh for 12 hours
-CACHE_DIR = (
-    Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "email-helper"
-)
-
-PAGE_LIMIT = 200  # the Nylas API caps a single list page at 200 items
-
-# Measured throughput differs a lot per provider: Google and IMAP deliver a
-# 100-item page in about 3s, while Microsoft needs ~0.1-0.2s per message, so a
-# 200-item page blows past the request timeout. Microsoft therefore paginates in
-# smaller pages.
-PAGE_LIMIT_BY_PROVIDER = {"microsoft": 50}
-
-DEFAULT_WORKERS = 4
 
 # ---------------------------------------------------------------------- types
 
@@ -103,11 +72,6 @@ class ConfigError(RuntimeError):
     """The environment is unusable, e.g. the API key is missing."""
 
 
-def page_limit(provider: str | None) -> int:
-    """Safe page size for one provider."""
-    return PAGE_LIMIT_BY_PROVIDER.get((provider or "").lower(), PAGE_LIMIT)
-
-
 # ------------------------------------------------------------------- 1. client
 
 
@@ -130,8 +94,8 @@ class _PooledHttp:
     def request(self, method: str, url: str, **kwargs: Any) -> requests.Response:
         """Send one request, retrying transport failures and 5xx/429 answers."""
         failure: Exception | None = None
-        for attempt in range(1, RETRY_ATTEMPTS + 1):
-            last_attempt = attempt == RETRY_ATTEMPTS
+        for attempt in range(1, config.RETRY_ATTEMPTS + 1):
+            last_attempt = attempt == config.RETRY_ATTEMPTS
             try:
                 response = self._session.request(method, url, **kwargs)
             except (
@@ -140,14 +104,17 @@ class _PooledHttp:
             ) as exc:
                 failure = exc
             else:
-                if last_attempt or response.status_code not in RETRY_STATUS:
+                if (
+                    last_attempt
+                    or response.status_code not in config.RETRY_STATUS_CODES
+                ):
                     return response
                 failure = None
                 response.close()
             if not last_attempt:
-                time.sleep(RETRY_BACKOFF * attempt)
+                time.sleep(config.RETRY_BACKOFF_SECONDS * attempt)
         raise failure or RuntimeError(
-            f"{method} {url} failed after {RETRY_ATTEMPTS} attempts"
+            f"{method} {url} failed after {config.RETRY_ATTEMPTS} attempts"
         )
 
 
@@ -158,17 +125,19 @@ def client() -> nylas.Client:
     """Return the process-wide Nylas SDK client, creating it on first use."""
     global _client
     if _client is None:
-        key = os.environ.get(API_KEY_ENV)
+        key = os.environ.get(config.API_KEY_ENV)
         if not key:
             raise ConfigError(
-                f"{API_KEY_ENV} is not set\n"
-                f"hint: export {API_KEY_ENV}=$(nylas auth token)"
+                f"{config.API_KEY_ENV} is not set\n"
+                f"hint: export {config.API_KEY_ENV}=$(nylas auth token)"
             )
         # Swap the SDK's HTTP seam for one pooled, retrying Session. This is the
         # widest and most stable seam available: it covers every SDK resource,
         # including private methods we would otherwise have to mirror.
         sdk_http.requests = _PooledHttp()
-        _client = nylas.Client(api_key=key, api_uri=API_URI, timeout=REQUEST_TIMEOUT)
+        _client = nylas.Client(
+            api_key=key, api_uri=config.API_URI, timeout=config.REQUEST_TIMEOUT_SECONDS
+        )
     return _client
 
 
@@ -181,10 +150,10 @@ def list_data(response: Any) -> tuple[list[Any], str | None]:
 
 
 def _cache_file(name: str) -> Path:
-    return CACHE_DIR / f"{name}.json"
+    return config.CACHE_DIR / f"{name}.json"
 
 
-def cache_load(name: str, ttl: int = CACHE_TTL) -> Any:
+def cache_load(name: str, ttl: int = config.CACHE_TTL_SECONDS) -> Any:
     """Return cached data if present and younger than ttl, else None."""
     try:
         blob = json.loads(_cache_file(name).read_text(encoding="utf-8"))
@@ -198,7 +167,7 @@ def cache_load(name: str, ttl: int = CACHE_TTL) -> Any:
 def cache_save(name: str, data: Any) -> None:
     """Best-effort cache write; a cache problem must never break a script."""
     try:
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        config.CACHE_DIR.mkdir(parents=True, exist_ok=True)
         _cache_file(name).write_text(
             json.dumps({"fetched_at": time.time(), "data": data}, ensure_ascii=False),
             encoding="utf-8",
@@ -443,7 +412,7 @@ def find_calendar(calendars: Sequence[Calendar], wanted: str) -> Calendar:
 
 
 def gather[T](
-    fn: Callable[[T], Any], items: Iterable[T], workers: int = DEFAULT_WORKERS
+    fn: Callable[[T], Any], items: Iterable[T], workers: int = config.DEFAULT_WORKERS
 ) -> tuple[list[Any], list[Exception | None]]:
     """Run fn(item) concurrently, one task per item, isolating failures.
 
