@@ -1,0 +1,18 @@
+[project]
+name = "agent-nylas"
+version = "0.1.0"
+description = "Read-only Nylas mail viewer and helpers"
+readme = "README.md"
+authors = [
+    { name = "HongmingLiang", email = "hm.liang.dev@outlook.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "nylas>=6.17.0",
+]
+
+[tool.pyright]
+include = ["src/agent_nylas"]
+extraPaths = ["src/agent_nylas"]
+venvPath = "."
+venv = ".venv"
