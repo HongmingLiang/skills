@@ -20,8 +20,10 @@ import unicodedata
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
+from html import unescape
+from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import Any, ClassVar, TypedDict, cast
 
 import config
 import nylas
@@ -475,6 +477,84 @@ def dwidth(text: str) -> int:
     return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in text)
 
 
+# CJK ideographs, incl. extensions and compatibility forms. Used to recognise
+# localized names (e.g. a Chinese-named calendar) without hardcoding them.
+CJK_RANGES = ((0x3400, 0x4DBF), (0x4E00, 0x9FFF), (0xF900, 0xFAFF), (0x20000, 0x2FA1F))
+
+
+def has_cjk(text: str | None) -> bool:
+    """True when the text contains CJK (Chinese, Japanese or Korean) ideographs."""
+    return any(any(lo <= ord(ch) <= hi for lo, hi in CJK_RANGES) for ch in (text or ""))
+
+
+def html_to_text(text: str | None) -> str:
+    """Render provider HTML (Outlook event descriptions) as plain text.
+
+    Uses the stdlib parser rather than a regex, so a bare "a < b" in a plain-text
+    description survives, and drops the content of style/script elements.
+    """
+    if not text:
+        return ""
+    if "<" not in text:
+        return unescape(text).strip()
+    parser = _HtmlText()
+    try:
+        parser.feed(text)
+        parser.close()
+    except ValueError:  # malformed markup: better the raw text than nothing
+        return text.strip()
+    return parser.text()
+
+
+class _HtmlText(HTMLParser):
+    """Collect text, turning block-level boundaries into line breaks."""
+
+    BREAKS: ClassVar[frozenset[str]] = frozenset(
+        {"br", "p", "div", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6"}
+    )
+    SKIP: ClassVar[frozenset[str]] = frozenset({"style", "script", "head"})
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._parts: list[str] = []
+        self._skipping = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in self.SKIP:
+            self._skipping += 1
+        elif tag in self.BREAKS:
+            self._parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self.SKIP:
+            self._skipping = max(0, self._skipping - 1)
+        elif tag in self.BREAKS:
+            self._parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if not self._skipping:
+            self._parts.append(data)
+
+    def text(self) -> str:
+        """Collapse whitespace and drop blank lines."""
+        lines = [
+            " ".join(raw.replace("\xa0", " ").split())
+            for raw in "".join(self._parts).splitlines()
+        ]
+        return "\n".join(line for line in lines if line)
+
+
+def split_width(text: str, width: int) -> tuple[str, str]:
+    """Split text into (head that fits `width` display columns, the rest)."""
+    used = 0
+    for index, char in enumerate(text):
+        step = 2 if unicodedata.east_asian_width(char) in "WF" else 1
+        if used + step > width:
+            return text[:index], text[index:]
+        used += step
+    return text, ""
+
+
 def trunc(text: str | None, width: int) -> str:
     """Truncate to a display width, collapsing newlines and adding an ellipsis."""
     text = (text or "").replace("\n", " ").strip()
@@ -482,14 +562,44 @@ def trunc(text: str | None, width: int) -> str:
         return ""
     if dwidth(text) <= width:
         return text
-    out, used = "", 0
-    for char in text:
-        step = 2 if unicodedata.east_asian_width(char) in "WF" else 1
-        if used + step > width - 1:
-            break
-        out += char
-        used += step
-    return out + "\u2026"
+    head, _ = split_width(text, width - 1)
+    return head + "\u2026"
+
+
+def wrap(text: str | None, width: int) -> list[str]:
+    """Wrap text into lines of at most `width` display columns.
+
+    Breaks at whitespace when possible. Runs that cannot fit on a line by
+    themselves -- a URL, or Chinese text without spaces -- are hard-split, so a
+    line never exceeds the width.
+    """
+    if width <= 1:
+        return []
+    lines: list[str] = []
+    line = ""
+    for word in (text or "").split():
+        while dwidth(word) > width - (dwidth(line) + 1 if line else 0):
+            room = width - (dwidth(line) + 1 if line else 0)
+            if room <= 0:
+                lines.append(line)
+                line = ""
+                continue
+            head, word = split_width(word, room)
+            line = f"{line} {head}" if line else head
+            lines.append(line)
+            line = ""
+        if not word:
+            continue
+        if not line:
+            line = word
+        elif dwidth(line) + 1 + dwidth(word) <= width:
+            line = f"{line} {word}"
+        else:
+            lines.append(line)
+            line = word
+    if line:
+        lines.append(line)
+    return lines
 
 
 def pad(text: str | None, width: int) -> str:

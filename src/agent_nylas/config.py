@@ -66,6 +66,15 @@ DEFAULT_WORKERS = 4  # concurrent accounts
 DEFAULT_MESSAGE_LIMIT = 10
 DEFAULT_MESSAGE_MAX = 200
 
+# -------------------------------------------------------------- calendar view
+
+# Default window length for cal.py, in days from the window start (today).
+DEFAULT_CALENDAR_DAYS = 365
+
+# Default account selector for cal.py. Only the Outlook (Microsoft) account is
+# in scope for now, so the other grants are left alone unless asked for with -a.
+DEFAULT_CALENDAR_ACCOUNT = "microsoft"
+
 
 def page_size(provider: str | None) -> int:
     """Page size to use for one provider."""
