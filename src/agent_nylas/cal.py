@@ -174,6 +174,16 @@ def build_window(opts: Options) -> Window:
     return Window(since=start, until=start + opts.days * 86400, days=opts.days)
 
 
+def has_cjk(text: str | None) -> bool:
+    """True when the text contains CJK (Chinese, Japanese or Korean) ideographs.
+
+    CJK ideographs, including extensions and compatibility forms, are how a
+    calendar named in Chinese is recognised without hardcoding any name.
+    """
+    ranges = ((0x3400, 0x4DBF), (0x4E00, 0x9FFF), (0xF900, 0xFAFF), (0x20000, 0x2FA1F))
+    return any(any(lo <= ord(ch) <= hi for lo, hi in ranges) for ch in (text or ""))
+
+
 def skip_reason(calendar: nylib.Calendar, opts: Options) -> str | None:
     """Why this calendar is not read, or None when it is.
 
@@ -181,7 +191,7 @@ def skip_reason(calendar: nylib.Calendar, opts: Options) -> str | None:
     country-specific holiday feed and a localized mirror of the primary
     calendar out of the way; --include-cjk reads them anyway.
     """
-    if not opts.include_cjk and nylib.has_cjk(calendar["name"]):
+    if not opts.include_cjk and has_cjk(calendar["name"]):
         return "chinese name"
     for pattern in opts.exclude:
         if pattern.strip().lower() in calendar["name"].lower():
@@ -369,7 +379,16 @@ def select_calendars(
     calendars = nylib.load_calendars(grant["id"], refresh=opts.refresh)
 
     if opts.calendars:
-        wanted = [nylib.find_calendar(calendars, name) for name in opts.calendars]
+        # "primary" is an alias the API accepts for calendar_id, so accept it too.
+        wanted = [
+            nylib.resolve_named(
+                calendars,
+                name,
+                kind="calendar",
+                aliases={"primary": lambda c: bool(c["is_primary"])},
+            )
+            for name in opts.calendars
+        ]
         return wanted, []
 
     keep: list[nylib.Calendar] = []
@@ -473,11 +492,6 @@ def list_calendars(grant: nylib.Grant, opts: Options) -> AccountCalendars:
     }
 
 
-def aligned(text: str, width: int) -> str:
-    """Pad to width without truncating: a calendar name is also a -c argument."""
-    return text + " " * max(0, width - nylib.dwidth(text))
-
-
 def print_calendars(account: AccountCalendars) -> None:
     """Render one account's calendar list."""
     print(f"\n=== {account['email']} [{account['provider']}] ===")
@@ -486,8 +500,10 @@ def print_calendars(account: AccountCalendars) -> None:
             "read-only" if calendar["read_only"] else "writable "
         )
         note = f"   (skipped: {calendar['skipped']})" if calendar["skipped"] else ""
+        # A name is not truncated: it is also what -c accepts as input.
         print(
-            f"  {flags}  {aligned(calendar['name'], NAME_WIDTH)} {calendar['id']}{note}"
+            f"  {flags}  {nylib.pad(calendar['name'], NAME_WIDTH, truncate=False)}"
+            f" {calendar['id']}{note}"
         )
 
 
@@ -704,7 +720,7 @@ def run(args: argparse.Namespace) -> int:
     else:
         if not reports:
             print("! nothing to show", file=sys.stderr)
-        width = max(80, nylib.terminal_width())
+        width = nylib.terminal_width()
         for report in reports:
             print_account(report, opts, width)
 

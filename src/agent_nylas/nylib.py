@@ -20,7 +20,6 @@ import unicodedata
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
-from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, ClassVar, TypedDict, cast
@@ -178,14 +177,6 @@ def cache_save(name: str, data: Any) -> None:
         pass
 
 
-def cache_drop(name: str) -> None:
-    """Forget one cache entry (used when a cached identifier stops working)."""
-    try:
-        _cache_file(name).unlink()
-    except OSError:
-        pass
-
-
 def _cached[T](
     name: str, fetch: Callable[[], list[T]], refresh: bool = False
 ) -> list[T]:
@@ -287,11 +278,6 @@ def load_folders(grant_id: str, refresh: bool = False) -> list[Folder]:
     return _cached(f"folders-{grant_id}", fetch, refresh)
 
 
-def invalidate_folders(grant_id: str) -> None:
-    """Drop the cached folder list of one grant."""
-    cache_drop(f"folders-{grant_id}")
-
-
 def load_calendars(grant_id: str, refresh: bool = False) -> list[Calendar]:
     """Calendars of one grant, cached.
 
@@ -316,26 +302,21 @@ def load_calendars(grant_id: str, refresh: bool = False) -> list[Calendar]:
     return _cached(f"calendars-{grant_id}", fetch, refresh)
 
 
-def invalidate_calendars(grant_id: str) -> None:
-    """Drop the cached calendar list of one grant."""
-    cache_drop(f"calendars-{grant_id}")
-
-
-def resolve_named[T](
+def resolve_named[T: Mapping[str, Any]](
     items: Sequence[T],
     wanted: str,
     *,
     kind: str,
-    id_of: Callable[[T], str],
-    name_of: Callable[[T], str],
     aliases: Mapping[str, Callable[[T], bool]] | None = None,
 ) -> T:
     """Resolve one item by keyword alias, id, exact name, or unique name substring.
 
-    Matching is case-insensitive, so both "dev" and "DEV" work, and names in any
-    script work as-is. `aliases` maps a keyword such as "primary" to a predicate.
-    Raises LookupError listing the candidates when nothing matches or the term is
-    ambiguous.
+    Items are the typed dicts of this package (folders, calendars), which all
+    carry an "id" and a "name", so a caller passes its list plus the kind for
+    error text and gets that same item type back. Matching is case-insensitive,
+    so both "dev" and "DEV" work, and names in any script work as-is. `aliases`
+    maps a keyword such as "primary" to a predicate. Raises LookupError listing
+    the candidates when nothing matches or the term is ambiguous.
     """
     wanted = (wanted or "").strip()
     low = wanted.lower()
@@ -343,40 +324,29 @@ def resolve_named[T](
         raise LookupError(f"empty {kind} name")
 
     if aliases:
-        matches = aliases.get(low)
-        if matches is not None:
+        alias = aliases.get(low)
+        if alias is not None:
             for item in items:
-                if matches(item):
+                if alias(item):
                     return item
 
     for item in items:
-        if id_of(item) == wanted:
+        if item["id"] == wanted:
             return item
 
-    exact = [i for i in items if name_of(i).strip().lower() == low]
+    exact = [i for i in items if str(i["name"]).strip().lower() == low]
     if len(exact) == 1:
         return exact[0]
 
-    hits = [i for i in items if low in name_of(i).lower()]
+    hits = [i for i in items if low in str(i["name"]).lower()]
     if len(hits) == 1:
         return hits[0]
 
-    available = ", ".join(sorted(name_of(i) for i in items))
+    available = ", ".join(sorted(str(i["name"]) for i in items))
     if not hits:
         raise LookupError(f"no {kind} matches {wanted!r}; available: {available}")
-    found = ", ".join(sorted(name_of(i) for i in hits))
+    found = ", ".join(sorted(str(i["name"]) for i in hits))
     raise LookupError(f"{kind} {wanted!r} is ambiguous: {found}")
-
-
-def find_folder(folders: Sequence[Folder], wanted: str) -> Folder:
-    """Resolve a folder by id, exact name, or unique name substring."""
-    return resolve_named(
-        folders,
-        wanted,
-        kind="folder",
-        id_of=lambda f: f["id"],
-        name_of=lambda f: f["name"],
-    )
 
 
 def find_inbox(folders: Sequence[Folder]) -> Folder | None:
@@ -392,22 +362,6 @@ def find_inbox(folders: Sequence[Folder]) -> Folder | None:
         if folder["name"].strip().lower() in ("inbox", "in"):
             return folder
     return None
-
-
-def find_calendar(calendars: Sequence[Calendar], wanted: str) -> Calendar:
-    """Resolve a calendar by id, exact name, or unique name substring.
-
-    The literal "primary" resolves to the account's primary calendar, which is
-    also what the API accepts for calendar_id.
-    """
-    return resolve_named(
-        calendars,
-        wanted,
-        kind="calendar",
-        id_of=lambda c: c["id"],
-        name_of=lambda c: c["name"],
-        aliases={"primary": lambda c: bool(c["is_primary"])},
-    )
 
 
 # ------------------------------------------- 5. concurrency and error text
@@ -477,42 +431,26 @@ def dwidth(text: str) -> int:
     return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in text)
 
 
-# CJK ideographs, incl. extensions and compatibility forms. Used to recognise
-# localized names (e.g. a Chinese-named calendar) without hardcoding them.
-CJK_RANGES = ((0x3400, 0x4DBF), (0x4E00, 0x9FFF), (0xF900, 0xFAFF), (0x20000, 0x2FA1F))
-
-
-def has_cjk(text: str | None) -> bool:
-    """True when the text contains CJK (Chinese, Japanese or Korean) ideographs."""
-    return any(any(lo <= ord(ch) <= hi for lo, hi in CJK_RANGES) for ch in (text or ""))
-
-
 def html_to_text(text: str | None) -> str:
     """Render provider HTML (Outlook event descriptions) as plain text.
 
-    Uses the stdlib parser rather than a regex, so a bare "a < b" in a plain-text
-    description survives, and drops the content of style/script elements.
+    The stdlib parser (rather than a regex) leaves a plain-text description be,
+    including a bare "a < b", and drops the text of style/script elements, so
+    what reaches the table is what a reader of the HTML would see.
     """
-    if not text:
-        return ""
-    if "<" not in text:
-        return unescape(text).strip()
     parser = _HtmlText()
-    try:
-        parser.feed(text)
-        parser.close()
-    except ValueError:  # malformed markup: better the raw text than nothing
-        return text.strip()
+    parser.feed(text or "")
+    parser.close()
     return parser.text()
 
 
 class _HtmlText(HTMLParser):
-    """Collect text, turning block-level boundaries into line breaks."""
+    """Collect visible text, turning block-level boundaries into line breaks."""
 
     BREAKS: ClassVar[frozenset[str]] = frozenset(
         {"br", "p", "div", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6"}
     )
-    SKIP: ClassVar[frozenset[str]] = frozenset({"style", "script", "head"})
+    SKIP: ClassVar[frozenset[str]] = frozenset({"head", "style", "script"})
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -528,19 +466,14 @@ class _HtmlText(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if tag in self.SKIP:
             self._skipping = max(0, self._skipping - 1)
-        elif tag in self.BREAKS:
-            self._parts.append("\n")
 
     def handle_data(self, data: str) -> None:
         if not self._skipping:
             self._parts.append(data)
 
     def text(self) -> str:
-        """Collapse whitespace and drop blank lines."""
-        lines = [
-            " ".join(raw.replace("\xa0", " ").split())
-            for raw in "".join(self._parts).splitlines()
-        ]
+        """Collapse runs of whitespace and the blank lines they leave behind."""
+        lines = [" ".join(line.split()) for line in "".join(self._parts).splitlines()]
         return "\n".join(line for line in lines if line)
 
 
@@ -602,56 +535,40 @@ def wrap(text: str | None, width: int) -> list[str]:
     return lines
 
 
-def pad(text: str | None, width: int) -> str:
-    """Left-align text inside a display width."""
-    text = trunc(text, width)
+def pad(text: str | None, width: int, *, truncate: bool = True) -> str:
+    """Left-align text inside a display width.
+
+    `width` is a column, so text longer than it is truncated by default. Pass
+    truncate=False to align without losing anything, which matters when the text
+    is also valid input elsewhere (a calendar name is also a -c argument).
+    """
+    text = trunc(text, width) if truncate else (text or "").strip()
     return text + " " * max(0, width - dwidth(text))
 
 
-def terminal_width(default: int = 120) -> int:
-    """Terminal width, with a fallback for non-interactive callers."""
-    return shutil.get_terminal_size((default, 24)).columns
+def terminal_width(floor: int = 80) -> int:
+    """Terminal width in columns, never narrower than `floor`.
+
+    Non-interactive callers have no terminal, so get_terminal_size falls back to
+    its own 120x24 default rather than to the minimum it is given.
+    """
+    return max(floor, shutil.get_terminal_size((120, 24)).columns)
 
 
-def fmt_ts(seconds: int | None) -> str:
-    """Unix seconds -> local 'MM-DD HH:MM'."""
+def local_time(seconds: int | None) -> datetime | None:
+    """Unix seconds as a local datetime, or None when the value is unusable."""
     if not seconds:
-        return "??-?? ??:??"
+        return None
     try:
-        return (
-            datetime.fromtimestamp(int(seconds), tz=UTC)
-            .astimezone()
-            .strftime("%m-%d %H:%M")
-        )
+        return datetime.fromtimestamp(int(seconds), tz=UTC).astimezone()
     except OverflowError, OSError, ValueError:
-        return "??-?? ??:??"
+        return None
 
 
 def ts_iso(seconds: int | None) -> str | None:
     """Unix seconds -> local ISO 8601, so callers never do epoch math."""
-    if not seconds:
-        return None
-    try:
-        return (
-            datetime.fromtimestamp(int(seconds))
-            .astimezone()
-            .isoformat(timespec="seconds")
-        )
-    except OverflowError, OSError, ValueError:
-        return None
-
-
-def display_name(people: Sequence[Mapping[str, Any]] | None) -> str:
-    """Short label for a table: the display name, else the bare address."""
-    if not people:
-        return "?"
-    first = people[0]
-    return str(first.get("name") or first.get("email") or "?").strip()
-
-
-def days_ago_timestamp(days: int) -> int:
-    """Unix timestamp for `days` days before now, for received_after filters."""
-    return int(time.time() - max(0, days) * 86400)
+    stamp = local_time(seconds)
+    return stamp.isoformat(timespec="seconds") if stamp else None
 
 
 def now_iso() -> str:
