@@ -1,6 +1,6 @@
 """
 nylib -- shared helpers for the read-only Nylas commands in this package
-(agent_nylas.mail today, agent_nylas.cal next).
+(email_list, email_read and event_list).
 
 Read-only by construction: it never sends, deletes, moves, or marks anything.
 It only builds an SDK client, resolves identifiers (grants, folders, calendars)
@@ -12,6 +12,8 @@ API_KEY_ENV -- the same variable the `nylas` CLI stores, so the CLI and these
 commands cannot drift apart.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import shutil
@@ -22,15 +24,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any, ClassVar, TypedDict, cast
+from typing import TYPE_CHECKING, Any, ClassVar, TypedDict, cast
 
 import config
-import nylas
-import requests
-import requests.adapters
-import requests.exceptions
-from nylas.handler import http_client as sdk_http
-from nylas.models.errors import NylasApiError, NylasSdkTimeoutError
+
+# The SDK and requests are imported where they are used: together they cost
+# about half a second to import, which the argument-parsing paths never need.
+if TYPE_CHECKING:
+    import nylas
+    import requests
 
 # ---------------------------------------------------------------------- types
 
@@ -87,6 +89,9 @@ class _PooledHttp:
     """
 
     def __init__(self) -> None:
+        import requests
+        import requests.adapters
+
         self._session = requests.Session()
         adapter = requests.adapters.HTTPAdapter(pool_connections=8, pool_maxsize=8)
         for scheme in ("http://", "https://"):
@@ -94,6 +99,8 @@ class _PooledHttp:
 
     def request(self, method: str, url: str, **kwargs: Any) -> requests.Response:
         """Send one request, retrying transport failures and 5xx/429 answers."""
+        import requests.exceptions
+
         failure: Exception | None = None
         for attempt in range(1, config.RETRY_ATTEMPTS + 1):
             last_attempt = attempt == config.RETRY_ATTEMPTS
@@ -132,6 +139,9 @@ def client() -> nylas.Client:
                 f"{config.API_KEY_ENV} is not set\n"
                 f"hint: export {config.API_KEY_ENV}=$(nylas auth token)"
             )
+        import nylas
+        from nylas.handler import http_client as sdk_http
+
         # Swap the SDK's HTTP seam for one pooled, retrying Session. This is the
         # widest and most stable seam available: it covers every SDK resource,
         # including private methods we would otherwise have to mirror.
@@ -395,6 +405,9 @@ def gather[T](
 
 def describe_error(exc: Exception) -> str:
     """One-line description of an exception, with HTTP status and request id."""
+    import requests.exceptions
+    from nylas.models.errors import NylasApiError, NylasSdkTimeoutError
+
     if isinstance(exc, LookupError):
         return str(exc)  # our own resolution failures are already readable
     if isinstance(exc, NylasApiError):
@@ -416,6 +429,8 @@ def describe_error(exc: Exception) -> str:
 
 def is_not_found(exc: Exception) -> bool:
     """True when the API said the object is gone, i.e. a cached id went stale."""
+    from nylas.models.errors import NylasApiError
+
     if isinstance(exc, NylasApiError):
         if exc.status_code == 404:
             return True

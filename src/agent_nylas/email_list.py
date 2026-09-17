@@ -32,17 +32,21 @@ Notes:
     faster.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import sys
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, TypedDict, cast
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 import config
 import nylib
-from nylas.models.messages import ListMessagesQueryParams, Message
+
+if TYPE_CHECKING:
+    from nylas.models.messages import ListMessagesQueryParams, Message
 
 # Fields this view asks the API for. Everything else (notably the HTML body)
 # stays on the server, which is where most of the payload saving comes from.
@@ -125,7 +129,7 @@ def build_query(
         query["received_after"] = int(time.time()) - filters.days * 86400
     if page_token:
         query["page_token"] = page_token
-    return cast(ListMessagesQueryParams, query)
+    return cast("ListMessagesQueryParams", query)
 
 
 def fetch_page(

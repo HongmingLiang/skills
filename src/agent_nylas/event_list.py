@@ -44,6 +44,8 @@ Notes:
     1 when anything failed, so callers can detect partial runs.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import sys
@@ -51,11 +53,13 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
-from typing import Any, TypedDict, cast
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 import config
 import nylib
-from nylas.models.events import Event, ListEventQueryParams
+
+if TYPE_CHECKING:
+    from nylas.models.events import Event, ListEventQueryParams
 
 # Fields this view asks the API for. `participants` is required: the SDK model
 # marks it non-optional, and omitting it makes dataclasses_json warn on every
@@ -223,7 +227,7 @@ def build_query(
     }
     if page_token:
         query["page_token"] = page_token
-    return cast(ListEventQueryParams, query)
+    return cast("ListEventQueryParams", query)
 
 
 def fetch_page(

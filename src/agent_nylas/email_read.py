@@ -40,17 +40,21 @@ Notes:
     detectable, and 2 for a missing API key or unreadable input.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import config
 import nylib
-from nylas.models.attachments import Attachment
+
+if TYPE_CHECKING:
+    from nylas.models.attachments import Attachment
 
 # The projection this view asks for. grant_id has to be in it: the SDK decodes
 # the response into Message, whose only field without a default is grant_id, so
