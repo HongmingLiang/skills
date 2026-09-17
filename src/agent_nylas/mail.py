@@ -1,26 +1,9 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.14"
-# dependencies = [
-#     "nylas>=6.17.0",
-# ]
-# ///
+#!/usr/bin/env -S uv run
 """
 mail -- read-only mail viewer for every account, built on the Nylas Python SDK.
 
-Dependencies are declared inline (PEP 723), so `uv run` builds an isolated
-environment on first use and `./mail.py` works from any directory.
-
-Read-only guarantee: the only API call this script makes is messages.list.
-It never sends, deletes, moves, or marks anything.
-
-Why the SDK rather than the `nylas` CLI:
-  * accounts are fetched concurrently, so three mailboxes cost one round trip
-    instead of six sequential CLI invocations,
-  * `select` keeps HTML bodies off the wire (10x-17x less payload),
-  * `received_after` filters by date on the server, and `select` means no
-    client-side date window guesswork,
-  * failures arrive as typed exceptions, not as prose on stdout.
+Read-only guarantee: the only API call this script makes is messages.list, so it
+never sends, deletes, moves, or marks anything.
 
 Usage:
     ./mail.py                             every account, newest 10 in the inbox
@@ -38,73 +21,166 @@ Usage:
 Output legend:  U unread   S starred, followed by sender and subject.
 
 Notes:
-  * Folder names are matched case-insensitively; a unique substring works too.
-  * A folder that does not exist in one account skips that account only.
-  * Exit code is 1 when any account failed, so callers can detect partial runs.
+  * Folder names match case-insensitively, and a unique substring is enough.
+  * A folder missing in one account skips that account only, and the exit code
+    is 1 when any account failed, so callers can detect partial runs.
   * Cached ids self-heal: a stale folder id triggers one refresh and one retry.
-  * Microsoft accounts answer slowly (about 0.1-0.2s per message), so pages are
-    capped at 50 there and bigger requests paginate; Google and IMAP are roughly
-    ten times faster. Pulling several hundred Microsoft messages takes minutes.
+  * Microsoft answers about 0.1-0.2s per message, so pages there are capped at
+    50 and larger requests paginate; Google and IMAP are roughly ten times
+    faster.
 """
 
 import argparse
+import json
 import sys
-from typing import cast
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any, TypedDict, cast
 
 import nylib
-from nylas.models.messages import ListMessagesQueryParams
+from nylas.models.messages import ListMessagesQueryParams, Message
 
 # Fields requested from the API. Everything else (notably the HTML body) stays
 # on the server, which is where most of the payload saving comes from.
 SELECT = "id,grant_id,object,thread_id,subject,from,date,unread,starred,folders"
 
+DEFAULT_LIMIT = 10
 SENDER_WIDTH = 26
 STAMP_WIDTH = 11
+ID_INDENT = " " * (STAMP_WIDTH + 7)
 
 
-def build_query(folder, limit, args, page_token=None):
-    """Assemble the messages.list query parameters for one request."""
-    query = {"limit": limit, "select": SELECT}
-    if folder:
-        query["in"] = folder["id"]
-    if args.unread:
+class MessageRow(TypedDict):
+    """One message, flattened to the fields the display and JSON output need."""
+
+    id: str
+    thread_id: str | None
+    date: int | None
+    date_iso: str | None
+    unread: bool
+    starred: bool
+    sender_name: str
+    sender_email: str | None
+    subject: str
+    folder_names: list[str]
+
+
+class AccountReport(TypedDict):
+    """One mailbox worth of results, or the reason there are none."""
+
+    email: str
+    provider: str | None
+    grant_status: str | None
+    folder: str
+    folder_id: str | None
+    count: int
+    messages: list[MessageRow]
+
+
+@dataclass(frozen=True)
+class Filters:
+    """Server-side filters; only the ones the user asked for are sent."""
+
+    unread: bool = False
+    starred: bool = False
+    days: int | None = None
+
+
+@dataclass(frozen=True)
+class Options:
+    """Everything the read path needs, assembled once from the CLI."""
+
+    account: str = "all"
+    target: int = DEFAULT_LIMIT
+    filters: Filters = Filters()
+    folder: str | None = None
+    all_folders: bool = False
+    refresh: bool = False
+    ids: bool = False
+
+
+def build_query(
+    folder_id: str | None, limit: int, filters: Filters, page_token: str | None = None
+) -> ListMessagesQueryParams:
+    """Assemble the messages.list query parameters for one request.
+
+    The cast is needed because the SDK builds ListMessagesQueryParams with a
+    functional TypedDict that unpacks ListQueryParams at runtime, so the
+    inherited keys (limit, page_token) are invisible to type checkers.
+    """
+    query: dict[str, Any] = {"limit": limit, "select": SELECT}
+    if folder_id:
+        query["in"] = folder_id
+    if filters.unread:
         query["unread"] = True
-    if args.starred:
+    if filters.starred:
         query["starred"] = True
-    if args.days is not None:
-        query["received_after"] = nylib.days_ago_timestamp(args.days)
+    if filters.days is not None:
+        query["received_after"] = nylib.days_ago_timestamp(filters.days)
     if page_token:
         query["page_token"] = page_token
-    return query
+    return cast(ListMessagesQueryParams, query)
 
 
-def fetch_page(grant_id, folder, limit, args, page_token=None):
+def fetch_page(
+    grant_id: str,
+    folder_id: str | None,
+    limit: int,
+    filters: Filters,
+    page_token: str | None = None,
+) -> tuple[list[Message], str | None]:
     """One page of messages. Returns (messages, next_cursor)."""
     response = nylib.client().messages.list(
         identifier=grant_id,
-        # TypedDict keys "limit"/"page_token" are invisible to type checkers
-        # (the SDK builds it with **get_type_hints), hence the cast.
-        query_params=cast(ListMessagesQueryParams, build_query(folder, limit, args, page_token)),
+        query_params=build_query(folder_id, limit, filters, page_token),
     )
-    return nylib.list_data(response)
+    data, next_cursor = nylib.list_data(response)
+    return data, next_cursor
 
 
-def resolve_folder(grant, args):
+def to_row(message: Message) -> MessageRow:
+    """Flatten one SDK message into the row the display and JSON use."""
+    # to_dict() is generated by the dataclasses_json decorator on the SDK model,
+    # so it exists at runtime but is invisible to type checkers.
+    data: dict[str, Any] = message.to_dict()  # pyright: ignore[reportAttributeAccessIssue]
+    sender = data.get("from") or []
+    # The cast is for the SDK's untyped payload: to_dict() yields Any | None
+    # values, which pyright refuses to assign into a TypedDict field by field.
+    return cast(
+        MessageRow,
+        {
+            "id": data.get("id"),
+            "thread_id": data.get("thread_id"),
+            "date": data.get("date"),
+            "date_iso": nylib.ts_iso(data.get("date")),
+            "unread": bool(data.get("unread")),
+            "starred": bool(data.get("starred")),
+            "sender_name": nylib.display_name(sender),
+            "sender_email": (sender[0].get("email") if sender else None),
+            "subject": data.get("subject") or "",
+            "folder_names": data.get("folders") or [],
+        },
+    )
+
+
+def resolve_folder(
+    grant: nylib.Grant, opts: Options
+) -> tuple[nylib.Folder | None, str, dict[str, str]]:
     """Decide which folder to read for one account.
 
-    Returns (folder_or_None, label, folders_by_id). Raises LookupError when a
-    requested folder name cannot be resolved in this account.
+    Returns (folder_or_None, label, folder_names_by_id). Raises LookupError when
+    a requested folder name cannot be resolved in this account.
     """
-    folders = nylib.load_folders(grant["id"], refresh=args.refresh)
+    folders = nylib.load_folders(grant["id"], refresh=opts.refresh)
     by_id = {f["id"]: f["name"] for f in folders}
 
-    if args.all_folders:
+    if opts.all_folders:
         # No folder filter, but the id -> name map is still needed to label
         # each message with the folders it lives in.
         return None, "all folders", by_id
 
-    if args.folder:
-        folder = nylib.find_folder(folders, args.folder)
+    if opts.folder:
+        folder = nylib.find_folder(folders, opts.folder)
         return folder, folder["name"], by_id
 
     inbox = nylib.find_inbox(folders)
@@ -113,44 +189,53 @@ def resolve_folder(grant, args):
     return inbox, inbox["name"], by_id
 
 
-def to_row(message):
-    """Flatten one SDK message into the dict the display and JSON use."""
-    data = message.to_dict()
-    sender = data.get("from") or []
-    return {
-        "id": data.get("id"),
-        "date": data.get("date"),
-        "date_iso": nylib.ts_iso(data.get("date")),
-        "stamp": nylib.fmt_ts(data.get("date")),
-        "unread": bool(data.get("unread")),
-        "starred": bool(data.get("starred")),
-        "from": sender,
-        "sender": nylib.display_name(sender),
-        "sender_email": (sender[0].get("email") if sender else None),
-        "subject": data.get("subject") or "",
-        "thread_id": data.get("thread_id"),
-        "folders": data.get("folders") or [],
-    }
+def read_messages(
+    grant: nylib.Grant, folder: nylib.Folder | None, opts: Options
+) -> list[MessageRow]:
+    """Fetch up to the requested number of messages, paginating as needed.
+
+    Both -n and --all end up here: the target is the requested limit either way.
+    Pages are sized per provider (see nylib.page_limit) because Microsoft
+    answers a large page far more slowly than Google or IMAP.
+    """
+    size = nylib.page_limit(grant.get("provider"))
+    rows: list[MessageRow] = []
+    page_token: str | None = None
+    while len(rows) < opts.target:
+        want = min(size, opts.target - len(rows))
+        messages, page_token = fetch_page(
+            grant["id"],
+            folder["id"] if folder else None,
+            want,
+            opts.filters,
+            page_token,
+        )
+        rows.extend(to_row(message) for message in messages)
+        if not messages or not page_token:
+            break
+    return rows
 
 
-def fetch_account(grant, args):
+def fetch_account(grant: nylib.Grant, opts: Options) -> AccountReport:
     """Read one mailbox. Raises on failure; the caller isolates accounts."""
-    folder, label, folders_by_id = resolve_folder(grant, args)
+    folder, label, folders_by_id = resolve_folder(grant, opts)
 
     try:
-        rows = read_messages(grant, folder, args)
-    except Exception as exc:  # noqa: BLE001 - retried only for a stale folder id
-        if not (folder and args.folder and nylib.is_not_found(exc)):
+        rows = read_messages(grant, folder, opts)
+    except Exception as exc:  # retried below only when a cached folder id went stale
+        if not (folder and opts.folder and nylib.is_not_found(exc)):
             raise
         # The cached folder id went stale (folder renamed or recreated):
         # drop the cache, resolve again, and retry exactly once.
         nylib.invalidate_folders(grant["id"])
-        folder, label, folders_by_id = resolve_folder(grant, args)
-        rows = read_messages(grant, folder, args)
+        folder, label, folders_by_id = resolve_folder(grant, opts)
+        rows = read_messages(grant, folder, opts)
 
     rows.sort(key=lambda row: row["date"] or 0, reverse=True)
     for row in rows:
-        row["folder_names"] = [folders_by_id.get(fid, fid) for fid in row["folders"]]
+        row["folder_names"] = [
+            folders_by_id.get(fid, fid) for fid in row["folder_names"]
+        ]
     return {
         "email": grant["email"],
         "provider": grant.get("provider"),
@@ -162,32 +247,12 @@ def fetch_account(grant, args):
     }
 
 
-def read_messages(grant, folder, args):
-    """Fetch up to the requested number of messages, paginating as needed.
-
-    Both -n and --all end up here: the target is --limit normally and --max with
-    --all. Pages are sized per provider (see nylib.page_limit) because Microsoft
-    answers a large page far more slowly than Google or IMAP.
-    """
-    target = args.max if args.all else args.limit
-    size = nylib.page_limit(grant.get("provider"))
-    rows, page_token = [], None
-    while len(rows) < target:
-        want = min(size, target - len(rows))
-        messages, page_token = fetch_page(grant["id"], folder, want, args, page_token)
-        rows.extend(to_row(message) for message in messages)
-        if not messages or not page_token:
-            break
-    return rows
-
-
-def print_account(report, args, term_width):
+def print_account(report: AccountReport, opts: Options, term_width: int) -> None:
     """Render one mailbox as a plain-text block."""
-    header = (
+    print(
         f"\n=== {report['email']} [{report['provider']}]"
         f" - folder: {report['folder']} - {report['count']} messages ==="
     )
-    print(header)
     if not report["messages"]:
         print("  (no messages)")
         return
@@ -195,30 +260,22 @@ def print_account(report, args, term_width):
     for row in report["messages"]:
         mark = ("U" if row["unread"] else "-") + ("S" if row["starred"] else "-")
         tags = ""
-        if args.all_folders:
-            names = row["folder_names"]
-            if names:
-                tags = "[" + ",".join(names) + "] "
+        if opts.all_folders and row["folder_names"]:
+            tags = "[" + ",".join(row["folder_names"]) + "] "
         used = STAMP_WIDTH + len(mark) + SENDER_WIDTH + 4
         subject = nylib.trunc(
             tags + (row["subject"] or "(no subject)"), max(20, term_width - used)
         )
         print(
-            f" {nylib.pad(row['stamp'], STAMP_WIDTH)}"
-            f" {mark}  {nylib.pad(row['sender'], SENDER_WIDTH)} {subject}"
+            f" {nylib.pad(nylib.fmt_ts(row['date']), STAMP_WIDTH)}"
+            f" {mark}  {nylib.pad(row['sender_name'], SENDER_WIDTH)} {subject}"
         )
-        if args.ids:
-            print(f"{'':<{STAMP_WIDTH + 1}}      id: {row['id']}")
+        if opts.ids:
+            print(f"{ID_INDENT}id: {row['id']}")
 
 
-def terminal_width(default=120):
-    """Terminal width, with a fallback for non-interactive callers."""
-    import shutil
-
-    return shutil.get_terminal_size((default, 24)).columns
-
-
-def main():
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse and validate the command line."""
     parser = argparse.ArgumentParser(
         prog="mail",
         description="Read-only mail viewer (never sends, deletes, moves, or marks mail).",
@@ -231,12 +288,15 @@ def main():
         help="account selector: all (default) | outlook | gmail | pku | email",
     )
     parser.add_argument(
-        "-n", "--limit", type=int, default=10, help="messages per account (default 10)"
+        "-n",
+        "--limit",
+        type=int,
+        help=f"messages per account (default {DEFAULT_LIMIT})",
     )
     parser.add_argument(
         "--all",
         action="store_true",
-        help="paginate through everything, bounded by --max",
+        help="paginate up to --max (default 200)",
     )
     parser.add_argument(
         "--max",
@@ -272,19 +332,40 @@ def main():
         default=nylib.DEFAULT_WORKERS,
         help=f"concurrent accounts (default {nylib.DEFAULT_WORKERS})",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    if args.all and args.limit != 10:
+    if args.all and args.limit is not None:
         parser.error("--all cannot be combined with -n/--limit (use --max)")
     if args.all_folders and args.folder:
         parser.error("--all-folders cannot be combined with -f/--folder")
-    if args.limit < 1 or args.max < 1:
-        parser.error("--limit and --max must be positive")
+    if args.limit is not None and args.limit < 1:
+        parser.error("-n/--limit must be positive")
+    if args.all and args.max < 1:
+        parser.error("--max must be positive")
+    if args.days is not None and args.days < 0:
+        parser.error("--days must not be negative")
+    if args.workers < 1:
+        parser.error("--workers must be positive")
+    return args
 
-    grants = nylib.load_grants(refresh=args.refresh)
-    targets, unknown = nylib.select_grants(grants, args.account)
 
-    errors = [
+def run(args: argparse.Namespace) -> int:
+    """Read every selected account and report the result."""
+    nylib.client()  # fail fast: one clean config error instead of one per account
+    opts = Options(
+        account=args.account,
+        target=args.max if args.all else (args.limit or DEFAULT_LIMIT),
+        filters=Filters(unread=args.unread, starred=args.starred, days=args.days),
+        folder=args.folder,
+        all_folders=args.all_folders,
+        refresh=args.refresh,
+        ids=args.ids,
+    )
+
+    grants = nylib.load_grants(refresh=opts.refresh)
+    targets, unknown = nylib.select_grants(grants, opts.account)
+
+    errors: list[dict[str, str]] = [
         {"account": term, "error": "no account matches this selector"}
         for term in unknown
     ]
@@ -294,7 +375,7 @@ def main():
         print("! no accounts available for this API key", file=sys.stderr)
 
     reports, failures = nylib.gather(
-        lambda grant: fetch_account(grant, args), targets, workers=args.workers
+        lambda grant: fetch_account(grant, opts), targets, workers=args.workers
     )
     for grant, failure in zip(targets, failures):
         if failure is not None:
@@ -302,11 +383,9 @@ def main():
             errors.append({"account": grant["email"], "error": message})
             print(f"! {grant['email']}: {message}", file=sys.stderr)
 
-    accounts = [report for report in reports if report is not None]
+    accounts: list[Any] = [report for report in reports if report is not None]
 
     if args.json:
-        import json
-
         print(
             json.dumps(
                 {
@@ -321,11 +400,21 @@ def main():
     else:
         if not accounts:
             print("! nothing to show", file=sys.stderr)
-        width = max(80, terminal_width())
+        width = max(80, nylib.terminal_width())
         for report in accounts:
-            print_account(report, args, width)
+            print_account(report, opts, width)
 
     return 1 if errors else 0
+
+
+def main() -> int:
+    """Entry point: turn a missing API key into a clean message and exit code."""
+    args = parse_args()
+    try:
+        return run(args)
+    except nylib.ConfigError as exc:
+        print(f"! {exc}".replace("\n", "\n  "), file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
