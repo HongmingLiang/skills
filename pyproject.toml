@@ -9,7 +9,13 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "nylas>=6.17.0",
+    "requests>=2.32",
 ]
+
+[tool.ruff]
+# Vended skill docs under .agents contain Python samples that ruff would reformat;
+# keep lint and format scoped to the project's own code.
+extend-exclude = [".agents"]
 
 [tool.pyright]
 include = ["src/agent_nylas"]
