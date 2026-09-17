@@ -14,7 +14,7 @@ Usage:
     ./email_list.py -a outlook --all-folders      every folder (Outlook subfolders included)
     ./email_list.py --days 3                      only mail received in the last 3 days
     ./email_list.py --all --max 50                paginate, at most 50 per account
-    ./email_list.py --ids                         print message ids (for follow-up actions)
+    ./email_list.py --ids                         bare message ids, one per line (for piping)
     ./email_list.py -j                            JSON output for piping
     ./email_list.py --refresh                     ignore the cached account/folder lists
 
@@ -57,7 +57,6 @@ SELECT = "id,grant_id,object,thread_id,subject,from,date,unread,starred,folders"
 # in config.py.
 SENDER_WIDTH = 26
 STAMP_WIDTH = 11
-ID_INDENT = " " * (STAMP_WIDTH + 7)
 
 
 class MessageRow(TypedDict):
@@ -261,7 +260,11 @@ def fetch_account(grant: nylib.Grant, opts: Options) -> AccountReport:
 
 
 def print_account(report: AccountReport, opts: Options, term_width: int) -> None:
-    """Render one mailbox as a plain-text block."""
+    """Render one mailbox: bare ids with --ids, a plain-text table otherwise."""
+    if opts.ids:
+        for row in report["messages"]:
+            print(row["id"])
+        return
     print(
         f"\n=== {report['email']} [{report['provider']}]"
         f" - folder: {report['folder']} - {report['count']} messages ==="
@@ -285,8 +288,6 @@ def print_account(report: AccountReport, opts: Options, term_width: int) -> None
             f" {nylib.pad(date_label, STAMP_WIDTH)}"
             f" {mark}  {nylib.pad(row['sender_name'], SENDER_WIDTH)} {subject}"
         )
-        if opts.ids:
-            print(f"{ID_INDENT}id: {row['id']}")
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -334,7 +335,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=int,
         help="only mail received in the last N days (server-side filter)",
     )
-    parser.add_argument("--ids", action="store_true", help="print message ids")
+    parser.add_argument(
+        "--ids", action="store_true", help="print message ids only, one per line"
+    )
     parser.add_argument("-j", "--json", action="store_true", help="JSON output")
     parser.add_argument(
         "--refresh",
