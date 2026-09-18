@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "nylas>=6.17.0",
+#     "requests>=2.32",
+# ]
+# ///
 """
-event_list -- read-only event viewer for the Outlook account, built on the Nylas
+event_list -- read-only event viewer for Nylas calendar accounts, built on the
 Python SDK.
 
 Read-only guarantee: the only API call this script makes is events.list, so it
 never creates, updates, deletes, or answers an event.
 
-Usage (from the repository root):
-    uv run src/agent_nylas/event_list.py [flags]
+Usage (from the skill directory):
+    uv run scripts/event_list.py [flags]
     (no flags)            every calendar, next 365 days
     --days 30             shorter window
     --since 2026-01-01    window start (default: now)
@@ -20,13 +27,13 @@ Usage (from the repository root):
     -j                    JSON output for piping
     --refresh             ignore the cached calendar lists
 
-Scope: only the Microsoft (Outlook) account is read. Other grants are left
-alone unless asked for with -a, and their calendars are out of scope for now.
+Scope: -a narrows which accounts are read. It falls back to
+NYLAS_CALENDAR_ACCOUNT when that is set, and otherwise to the Microsoft
+(Outlook) account; pass -a all to read every account.
 
-Calendars with CJK names are skipped by default, because in this account
-those are a localized mirror of the primary calendar and a read-only holiday
-feed; the requested workflows live in the English-named calendars. The skip is
-always reported, and --include-cjk turns it off.
+Calendars with CJK names are skipped by default, because they are usually
+localized mirrors or holiday feeds rather than the calendars people schedule
+against. The skip is always reported, and --include-cjk turns it off.
 
 Recurring events are listed one row per series by default, dated at the series'
 nearest occurrence -- its original start can be years outside the window, so the
@@ -44,8 +51,6 @@ Notes:
   * Per-calendar failures do not hide the other calendars, and the exit code is
     1 when anything failed, so callers can detect partial runs.
 """
-
-from __future__ import annotations
 
 import argparse
 import sys
@@ -577,8 +582,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--account",
         default=config.DEFAULT_CALENDAR_ACCOUNT,
         help=(
-            "account selector: microsoft (default, the Outlook account) | "
-            "all | outlook | gmail | pku | email"
+            f"account selector: {config.DEFAULT_CALENDAR_ACCOUNT} (default) | "
+            "all | provider | address | grant id"
         ),
     )
     parser.add_argument(

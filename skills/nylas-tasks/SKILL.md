@@ -1,17 +1,19 @@
 ---
 name: nylas-tasks
-description: "Pick the right tool for mail and calendar work in this repo: the read-only scripts in src/agent_nylas (email_list.py, email_read.py, event_list.py) for listing and reading, the nylas CLI for everything that writes. Use when the user asks to see unread mail, read a message or its attachments, search mail, list upcoming events, or to send, reply, delete, move, mark, schedule or RSVP mail and calendar events."
-compatibility: "uv for the scripts; the nylas CLI v3.1.29 for everything else."
+description: "Pick the right tool for mail and calendar work: the read-only scripts shipped with this skill (email_list.py, email_read.py, event_list.py) for listing and reading, the nylas CLI for everything that writes. Use when the user asks to see unread mail, read a message or its attachments, search mail, list upcoming events, or to send, reply, delete, move, mark, schedule or RSVP mail and calendar events."
+compatibility: "uv for the scripts (each declares its own dependencies); the nylas CLI v3.1.29 for everything else."
+license: MIT
 ---
 
 # Mail and calendar: pick the tool, then read its rule
 
 Two toolboxes over the same accounts, both reading `NYLAS_FILE_STORE_PASSPHRASE`:
-`src/agent_nylas/*.py` is read-only by construction (list and find only, built for
-piping), and the `nylas` CLI is everything that changes state. Scripts are
-`uv run src/agent_nylas/<name>.py` from the repository root (or
-`./src/agent_nylas/<name>.py` with this project's virtualenv active); the rule
-files hold the flags.
+the scripts next to this file (`scripts/`) are read-only by construction (list
+and find only, built for piping), and the `nylas` CLI is everything that changes
+state. Run a script from this skill's directory as `uv run scripts/<name>.py`;
+each one declares its own dependencies (PEP 723), so uv builds an isolated
+environment and the skill works wherever it is installed. The rule files hold
+the flags.
 
 ## Rules
 
@@ -37,14 +39,15 @@ and attachment filters), `nylas email tracking-info\|metadata\|threads`.
   said go: `-y`/`-f` follow that approval, never replace it, and the CLI's own
   prompts are inert without a terminal (they exit `0` when they cancel).
 * Events stay personal: never pass `-p/--participant` -- it emails an invitation,
-  and this repo only schedules the user's own time.
-* The CLI acts on the active grant (here `hongming.liang@outlook.com`) unless the
-  account is passed; the scripts find each id's account themselves, so ids from
-  different accounts mix freely.
+  and this skill only schedules the user's own time.
+* The CLI acts on the active grant unless the account is passed; the scripts find
+  each id's account themselves, so ids from different accounts mix freely.
 * A local proxy adds seconds of latency (a stalled one, a minute) and a
   per-message loop pays it per message: say so before starting one.
 * In the scripts `-a` takes one comma-separated value (`all`, a provider, a
-  substring, a grant id) and does not accumulate: `-a gmail -a pku` keeps `pku`.
-* Keep the read-only guarantee when extending the scripts -- the only API calls
-  are `messages.list`/`find`, `folders.list`, `grants.list`, `events.list` -- and
-  run `uv run pyright` plus `uvx ruff check src/agent_nylas` after editing.
+  substring, a grant id) and does not accumulate: `-a google -a imap` keeps `imap`.
+* The calendar view reads the Microsoft (Outlook) account unless `-a` says
+  otherwise, and `NYLAS_CALENDAR_ACCOUNT` sets that default; the mail views read
+  every account until `-a` narrows them.
+* Keep the read-only guarantee when extending the scripts: the only API calls are
+  `messages.list`/`find`, `folders.list`, `grants.list`, `events.list`.

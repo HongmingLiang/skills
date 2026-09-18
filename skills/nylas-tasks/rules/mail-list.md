@@ -12,24 +12,24 @@ never merged. Listing marks nothing read -- see [mail-read.md](mail-read.md).
 
 ```bash
 # newest 10 per account -- the default
-uv run src/agent_nylas/email_list.py
+uv run scripts/email_list.py
 
 # unread, last three days, one account
-uv run src/agent_nylas/email_list.py -u --days 3 -a outlook
+uv run scripts/email_list.py -u --days 3 -a google
 
 # one folder by name (a unique substring is enough); pair it with -a, since a
 # folder that only exists in one account fails the others
-uv run src/agent_nylas/email_list.py -a outlook -f dev
+uv run scripts/email_list.py -a google -f dev
 
 # ids for the reader, or a digest for a script
-uv run src/agent_nylas/email_list.py -u --days 3 --ids | uv run src/agent_nylas/email_read.py -
-uv run src/agent_nylas/email_list.py -u --days 3 -j | python3 -c 'import json,sys
+uv run scripts/email_list.py -u --days 3 --ids | uv run scripts/email_read.py -
+uv run scripts/email_list.py -u --days 3 -j | python3 -c 'import json,sys
 for a in json.load(sys.stdin)["accounts"]:
     for m in a["messages"]:
         print(m["date_iso"], m["sender_email"], m["subject"])'
 
 # is anything unread anywhere? folders with their counts and ids, no messages
-uv run src/agent_nylas/email_list.py --folders
+uv run scripts/email_list.py --folders
 ```
 
 ## What to know
@@ -59,4 +59,4 @@ No sender, subject, body or attachment filter here: that is `nylas email search`
 (`--from`, `--subject`, `--to`, `--has-attachment`, `--after`, `-l 20`, `-q` for
 ids). Keep this script for the cross-account overview.
 
-All the flags: `uv run src/agent_nylas/email_list.py --help`.
+All the flags: `uv run scripts/email_list.py --help`.

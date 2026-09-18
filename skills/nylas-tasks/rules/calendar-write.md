@@ -17,7 +17,7 @@ own calendar: events are made without participants. The reads are
 nylas calendar events create -t "Review" -s "2026-01-15 14:00"
 
 # on a calendar other than the primary one -- and never with participants
-uv run src/agent_nylas/event_list.py --calendars              # calendar ids
+uv run scripts/event_list.py --calendars              # calendar ids
 nylas calendar events create -c <calendar-id> -t "Review" -s "2026-01-15 14:00" \
   -e "2026-01-15 15:00" -D "scope" -l "Room 519"
 
@@ -45,7 +45,7 @@ nylas calendar events delete <event-id> -f
 ## What to know
 
 * **No participants, ever**: `-p/--participant` emails an invitation to those
-  addresses, and inviting people is not this repo's job -- it schedules the
+  addresses, and inviting people is not this skill's job -- it schedules the
   user's own time. `update -p` would also replace the whole list. An event made
   here has nobody to notify.
 * Times: `'YYYY-MM-DD HH:MM'` (a `T` works too, and so do seconds and RFC3339),

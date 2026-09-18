@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "nylas>=6.17.0",
+#     "requests>=2.32",
+# ]
+# ///
 """
 email_list -- read-only mail viewer for every account, built on the Nylas Python SDK.
 
 Read-only guarantee: the only API call this script makes is messages.list, so it
 never sends, deletes, moves, or marks anything.
 
-Usage (from the repository root):
-    uv run src/agent_nylas/email_list.py [flags]
+Usage (from the skill directory):
+    uv run scripts/email_list.py [flags]
     (no flags)                every account, newest 10 in the inbox
     -n 20                     newest 20 per account
     -u                        unread only
-    -a outlook                one account: outlook | gmail | pku | email
+    -a google                 one account: a provider, an address, a grant id
     -f dev                    one folder, by name
-    -a outlook --all-folders  every folder (Outlook subfolders included)
+    -a google --all-folders   every folder, subfolders included
     --days 3                  only mail received in the last 3 days
     --all --max 50            paginate, at most 50 per account
     --folders                 list folders with their unread counts, read nothing
@@ -22,9 +29,9 @@ Usage (from the repository root):
 
 Output legend:  U unread   S starred, followed by sender and subject.
 
-See also: uv run src/agent_nylas/email_read.py reads one or more messages in full,
-and takes its ids from a listing:
-    uv run src/agent_nylas/email_list.py -j | uv run src/agent_nylas/email_read.py -
+See also: `email_read.py`, next to this script, reads one or more messages in
+full and takes its ids from a listing:
+    uv run scripts/email_list.py -j | uv run scripts/email_read.py -
 
 Notes:
   * Folder names match case-insensitively, and a unique substring is enough.
@@ -35,8 +42,6 @@ Notes:
     50 and larger requests paginate; Google and IMAP are roughly ten times
     faster.
 """
-
-from __future__ import annotations
 
 import argparse
 import sys
@@ -393,7 +398,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "-a",
         "--account",
         default="all",
-        help="account selector: all (default) | outlook | gmail | pku | email",
+        help="account selector: all (default) | provider | address | grant id",
     )
     parser.add_argument(
         "-n",

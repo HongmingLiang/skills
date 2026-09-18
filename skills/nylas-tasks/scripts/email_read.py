@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "nylas>=6.17.0",
+#     "requests>=2.32",
+# ]
+# ///
 """
 email_read -- read-only message reader: one or more messages, in full.
 
@@ -7,12 +14,12 @@ plus the cached folders.list / grants.list lookups used to name things. It never
 sends, deletes, moves, or marks anything, and it downloads nothing unless
 --save DIR is given.
 
-Usage (from the repository root):
-    uv run src/agent_nylas/email_read.py <id> [<id> ...] [flags]
+Usage (from the skill directory):
+    uv run scripts/email_read.py <id> [<id> ...] [flags]
     <id>                  one message, in full
     <id> <id> ...         several messages, fetched concurrently
     - < ids.txt           ids from stdin, whitespace separated
-    <id> -a outlook       pin the account instead of auto-detecting
+    <id> -a google        pin the account instead of auto-detecting
     <id> --save /tmp/att  save the attachments (never overwrites)
     <id> -j               JSON output: raw HTML body, no rendering
 
@@ -21,8 +28,8 @@ they are passed as arguments or piped in. `-` accepts plain ids, the JSON that
 `email_list.py -j` prints, or a JSON list -- a selection is expressed with the
 listing's own filters instead of with a second query language implemented here:
 
-    uv run src/agent_nylas/email_list.py -u --days 3 --ids | uv run src/agent_nylas/email_read.py -
-    uv run src/agent_nylas/email_list.py -j --days 3 | uv run src/agent_nylas/email_read.py -
+    uv run scripts/email_list.py -u --days 3 --ids | uv run scripts/email_read.py -
+    uv run scripts/email_list.py -j --days 3 | uv run scripts/email_read.py -
 
 Flags apply to the whole run -- none of them has a per-message variant worth a
 schema -- and ids are deduplicated, so piping a listing that repeats one is safe.
@@ -38,8 +45,6 @@ Notes:
   * Exit code is 1 when any requested id failed, so partial runs stay
     detectable, and 2 for a missing API key or unreadable input.
 """
-
-from __future__ import annotations
 
 import argparse
 import json
@@ -128,8 +133,9 @@ class Options:
 def extract_ids(document: Any) -> list[str]:
     """Message ids from a JSON report, in order.
 
-    Understands the shapes this package prints (email_list.py's accounts[].messages and
-    this script's messages[]), plus a bare list of ids or of message objects, so
+    Understands the shapes these scripts print (email_list.py's
+    accounts[].messages and this script's messages[]), plus a bare list of ids or
+    of message objects, so
     anything jq produces from one of those pipes in unchanged. Raises ValueError
     when the document holds no messages at all, which is the difference between
     "nothing matched" and "the input was not a listing".
@@ -444,7 +450,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "-a",
         "--account",
         default="all",
-        help="account selector: all (default) | outlook | gmail | pku | email",
+        help="account selector: all (default) | provider | address | grant id",
     )
     parser.add_argument(
         "--save",

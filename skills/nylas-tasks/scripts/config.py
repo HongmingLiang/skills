@@ -1,5 +1,5 @@
 """
-config -- tunables shared by the read-only Nylas commands in this package.
+config -- tunables shared by the read-only Nylas commands in this directory.
 
 Everything an operator might want to change lives here: how the API key is
 found, which endpoint is used, HTTP timeouts and retry policy, where the
@@ -29,12 +29,12 @@ API_URI = os.environ.get("NYLAS_API_URI", "https://api.us.nylas.com")
 
 # ------------------------------------------------------------------------ HTTP
 
-# Seconds. Measured through a local HTTP proxy: a 50-message Microsoft page
-# needs 5-10s, and a slow proxy handshake can add seconds more.
+# Seconds. A 50-message Microsoft page can need 5-10s, and a proxy in the path
+# adds more.
 REQUEST_TIMEOUT_SECONDS = 60
 
 # Transport failures are retried, because a single flaky connection used to
-# fail a whole account. Safe here only because every call in this package is a
+# fail a whole account. Safe here only because every call in these scripts is a
 # read: dropping the retry would also drop the risk of duplicate writes, so
 # write paths must not reuse it as-is.
 RETRY_ATTEMPTS = 3
@@ -46,7 +46,7 @@ RETRY_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 # Cached grants/folders/calendars are considered fresh for this long.
 CACHE_TTL_SECONDS = 12 * 60 * 60
 CACHE_DIR = (
-    Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "email-helper"
+    Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "nylas-tasks"
 )
 
 # --------------------------------------------------------------------- fetching
@@ -72,10 +72,11 @@ DEFAULT_MESSAGE_MAX = 200
 # (today).
 DEFAULT_CALENDAR_DAYS = 365
 
-# Default account selector for event_list.py. Only the Outlook (Microsoft)
-# account is in scope for now, so the other grants are left alone unless asked
-# for with -a.
-DEFAULT_CALENDAR_ACCOUNT = "microsoft"
+# Default account selector for event_list.py. The calendar view is scoped to the
+# one account that owns the user's calendar, Microsoft (Outlook) by default;
+# NYLAS_CALENDAR_ACCOUNT overrides it (a provider, an address, or a grant id),
+# and -a overrides both.
+DEFAULT_CALENDAR_ACCOUNT = os.environ.get("NYLAS_CALENDAR_ACCOUNT", "microsoft")
 
 
 def page_size(provider: str | None) -> int:

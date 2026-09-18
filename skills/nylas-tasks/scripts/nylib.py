@@ -1,5 +1,5 @@
 """
-nylib -- shared helpers for the read-only Nylas commands in this package
+nylib -- shared helpers for the read-only Nylas commands in this directory
 (email_list, email_read and event_list).
 
 Read-only by construction: it never sends, deletes, moves, or marks anything.
@@ -11,8 +11,6 @@ Credential: the API key is read from the environment variable named in
 API_KEY_ENV -- the same variable the `nylas` CLI stores, so the CLI and these
 commands cannot drift apart.
 """
-
-from __future__ import annotations
 
 import json
 import os
@@ -150,12 +148,12 @@ def client() -> nylas.Client:
             import nylas
             from nylas.handler import http_client as sdk_http
         except ImportError as exc:
-            # A bare `python3` outside this project's virtualenv gets here; say
-            # what to do instead of dying on a ModuleNotFoundError traceback.
+            # A bare `python3` (no uv, no project env) gets here; say what to do
+            # instead of dying on a ModuleNotFoundError traceback.
             raise ConfigError(
                 f"the Nylas SDK is not importable ({exc})\n"
                 "hint: run this command with uv, e.g. "
-                "uv run src/agent_nylas/email_list.py"
+                "uv run scripts/email_list.py"
             ) from exc
 
         # Swap the SDK's HTTP seam for one pooled, retrying Session. This is the
@@ -246,8 +244,8 @@ def select_grants(
 ) -> tuple[list[Grant], list[str]]:
     """Filter grants by selector.
 
-    selector accepts a comma-separated list of: "all", an email substring
-    ("outlook", "pku", a full address), a provider name ("google", "imap"),
+    selector accepts a comma-separated list of: "all", a part of the address
+    (like "example.com" or a full address), a provider name ("google", "imap"),
     or a full grant id.
 
     Returns (matched, unmatched_terms). Order follows the grant list, so output
@@ -359,7 +357,7 @@ def resolve_named[T: Mapping[str, Any]](
 ) -> T:
     """Resolve one item by keyword alias, id, exact name, or unique name substring.
 
-    Items are the typed dicts of this package (folders, calendars), which all
+    Items are the typed dicts of these scripts (folders, calendars), which all
     carry an "id" and a "name", so a caller passes its list plus the kind for
     error text and gets that same item type back. Matching is case-insensitive,
     so both "dev" and "DEV" work, and names in any script work as-is. `aliases`

@@ -18,7 +18,7 @@ nylas email mark starred <message-id>        # unstarred takes it off again
 nylas email threads mark <thread-id> --unread
 
 # move: --folder takes an ID, so ask for ids first
-uv run src/agent_nylas/email_list.py --folders -a outlook
+uv run scripts/email_list.py --folders -a google
 nylas email move <message-id> --folder <folder-id>
 nylas email move <message-id> --archive      # clears every folder/label
 

@@ -13,16 +13,16 @@ calendar, times in local time.
 
 ```bash
 # what is coming up -- --days defaults to a whole year, so always pass it
-uv run src/agent_nylas/event_list.py --days 7
+uv run scripts/event_list.py --days 7
 
 # every account (the script starts with the Outlook one), one calendar by name
-uv run src/agent_nylas/event_list.py --days 14 -a all -c Work
+uv run scripts/event_list.py --days 14 -a all -c Work
 
 # calendar ids, with primary/read-only flags and what is skipped
-uv run src/agent_nylas/event_list.py --calendars
+uv run scripts/event_list.py --calendars
 
 # every occurrence of a recurring event instead of one row per series
-uv run src/agent_nylas/event_list.py --days 60 --expand
+uv run scripts/event_list.py --days 60 --expand
 
 # one event, or a whole calendar as raw JSON (expanded series, for export)
 nylas calendar events show <event-id>
@@ -50,4 +50,4 @@ nylas calendar events import -c <calendar-id> --start 2026-01-01 --end 2026-12-3
   -n 20 --timezone Europe/Berlin`. `nylas calendar list` truncates ids in its
   table (`-w` for the full ones; its `-q` is a struct dump, not ids).
 
-All the flags: `uv run src/agent_nylas/event_list.py --help`, `nylas calendar --help`.
+All the flags: `uv run scripts/event_list.py --help`, `nylas calendar --help`.

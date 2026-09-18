@@ -1,24 +1,27 @@
 [project]
 name = "agent-nylas"
 version = "0.1.0"
-description = "Read-only Nylas mail viewer and helpers"
+description = "Read-only Nylas mail and calendar scripts, packaged as an agent skill"
 readme = "README.md"
 authors = [
     { name = "HongmingLiang", email = "hm.liang.dev@outlook.com" }
 ]
 requires-python = ">=3.14"
+# Dev and type-check environment. The entry scripts under
+# skills/nylas-tasks/scripts repeat these pins inline (PEP 723) so the skill
+# runs standalone; keep the two in sync.
 dependencies = [
     "nylas>=6.17.0",
     "requests>=2.32",
 ]
 
 [tool.ruff]
-# Vended skill docs under .agents contain Python samples that ruff would reformat;
-# keep lint and format scoped to the project's own code.
+# Skip installed third-party skills under .agents. The scripts authored in this
+# repo are linted through skills/nylas-tasks/scripts.
 extend-exclude = [".agents"]
 
 [tool.pyright]
-include = ["src/agent_nylas"]
-extraPaths = ["src/agent_nylas"]
+include = ["skills/nylas-tasks/scripts"]
+extraPaths = ["skills/nylas-tasks/scripts"]
 venvPath = "."
 venv = ".venv"

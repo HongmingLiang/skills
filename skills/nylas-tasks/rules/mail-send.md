@@ -26,27 +26,27 @@ sends nothing, so an unapproved draft simply stays a draft.
 
 ```bash
 # SEND -- the approved text only
-nylas email send hm.liang.ac@gmail.com --to bob@example.com --subject "Q3 numbers" \
+nylas email send me@example.com --to bob@example.com --subject "Q3 numbers" \
   --body "$(cat /tmp/body.txt)" -y
 
 # REPLY -- id from `email_list.py --ids` or `nylas email search "<query>" -q`
-nylas email reply <message-id> hm.liang.ac@gmail.com --body "$(cat /tmp/body.txt)" -y
+nylas email reply <message-id> me@example.com --body "$(cat /tmp/body.txt)" -y
 
 # DRAFT-FIRST -- create, show, send only on approval, delete if it is not going
-nylas email drafts create hm.liang.ac@gmail.com --to bob@example.com \
+nylas email drafts create me@example.com --to bob@example.com \
   --subject "Q3 numbers" --body "$(cat /tmp/body.txt)" -a /tmp/q3.pdf
 nylas email drafts show <draft-id>
 nylas email drafts send <draft-id> -y        # after the go-ahead
 nylas email drafts delete <draft-id> -f
 
 # SCHEDULE -- goes out later unwatched, so approve the exact text and time
-nylas email send hm.liang.ac@gmail.com --to bob@example.com --subject S \
+nylas email send me@example.com --to bob@example.com --subject S \
   --body "$(cat /tmp/body.txt)" --schedule "tomorrow 9am" -y
 nylas email scheduled list                   # what is queued
 nylas email scheduled cancel <id> -f
 
 # VERIFY -- the id the CLI printed: this finds it and shows its folder
-uv run src/agent_nylas/email_read.py <message-id>
+uv run scripts/email_read.py <message-id>
 ```
 
 ## What to know

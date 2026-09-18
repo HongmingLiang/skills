@@ -12,17 +12,17 @@ attachments. Read-only, so reading changes nothing -- not even the read flag.
 
 ```bash
 # one, or several in the order given (fetched concurrently)
-uv run src/agent_nylas/email_read.py <message-id> <id-2>
+uv run scripts/email_read.py <message-id> <id-2>
 
 # ids from the pipe: a listing, a JSON list, or a file
-uv run src/agent_nylas/email_list.py -u --days 3 --ids | uv run src/agent_nylas/email_read.py -
-uv run src/agent_nylas/email_read.py - < /tmp/ids.txt
+uv run scripts/email_list.py -u --days 3 --ids | uv run scripts/email_read.py -
+uv run scripts/email_read.py - < /tmp/ids.txt
 
 # attachments: listed by default, saved only when asked (never overwriting)
-uv run src/agent_nylas/email_read.py <message-id> --save /tmp/att
+uv run scripts/email_read.py <message-id> --save /tmp/att
 
 # raw payload, for something else to chew on
-uv run src/agent_nylas/email_read.py <message-id> -j
+uv run scripts/email_read.py <message-id> -j
 ```
 
 ## Marking what you read
@@ -32,7 +32,7 @@ belongs to the CLI, one call per target:
 
 ```bash
 nylas email mark read <message-id>          # or threads mark <thread-id> --read, for a whole thread
-uv run src/agent_nylas/email_list.py -u --days 3 --ids | while read -r id; do
+uv run scripts/email_list.py -u --days 3 --ids | while read -r id; do
   nylas email mark read "$id"
 done
 ```
@@ -52,4 +52,4 @@ done
   the body.
 * A failed attachment download still prints the message and exits 1.
 
-All the flags: `uv run src/agent_nylas/email_read.py --help`.
+All the flags: `uv run scripts/email_read.py --help`.
