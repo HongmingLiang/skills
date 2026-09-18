@@ -1,6 +1,6 @@
 ---
 name: nylas-tasks
-description: "Pick the right tool for mail and calendar work: the read-only scripts shipped with this skill (email_list.py, email_read.py, event_list.py) for listing and reading, the nylas CLI for everything that writes. Use when the user asks to see unread mail, read a message or its attachments, search mail, list upcoming events, or to send, reply, delete, move, mark, schedule or RSVP mail and calendar events."
+description: "Pick the right tool for mail and calendar work: the read-only scripts shipped with this skill (email_list.py, email_read.py, event_list.py) for listing and reading, the nylas CLI for everything that writes. Use when the user asks to see unread mail, read a message or download an attachment, search mail, list upcoming events, or to send, reply, delete, move, mark, schedule or RSVP mail and calendar events."
 compatibility: "uv for the scripts (each declares its own dependencies); the nylas CLI v3.1.29 for everything else."
 license: MIT
 disable-model-invocation: true
@@ -21,7 +21,7 @@ the flags.
 | Rule file | Covers | Tool |
 | --- | --- | --- |
 | [mail-list.md](rules/mail-list.md) | read: list and filter; a folder's counts and ids (`--folders`) | script `email_list.py` |
-| [mail-read.md](rules/mail-read.md) | read: one or many in full, attachments; then mark what you read | script `email_read.py`, CLI `nylas email mark read`, `nylas email threads mark` |
+| [mail-read.md](rules/mail-read.md) | read: one or many in full, attachments listed not fetched; then mark what you read | script `email_read.py`, CLI `nylas email mark read`, `nylas email threads mark` |
 | [mail-send.md](rules/mail-send.md) | create: send, reply, draft, schedule | CLI `nylas email send\|reply\|drafts\|scheduled` |
 | [mail-update.md](rules/mail-update.md) | update: unread, star, move; delete: message, thread | CLI `nylas email mark\|move\|delete`, `nylas email threads delete` |
 | [calendar-list.md](rules/calendar-list.md) | read: upcoming events, calendars, one event, a calendar as JSON | script `event_list.py`, CLI `nylas calendar events show\|import` |
@@ -41,6 +41,8 @@ and attachment filters), `nylas email tracking-info\|metadata\|threads`.
   mails the organizer -- happen only after the user has seen what will happen and
   said go: `-y`/`-f` follow that approval, never replace it, and the CLI's own
   prompts are inert without a terminal (they exit `0` when they cancel).
+* A read only lists attachments: `email_read.py` fetches the bytes after
+  `--save`, which writes into `DIR` or, with none, a fresh temp directory.
 * Events stay personal: never pass `-p/--participant` -- it emails an invitation,
   and this skill only schedules the user's own time.
 * The CLI acts on the active grant unless the account is passed; the scripts find

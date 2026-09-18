@@ -12,7 +12,7 @@ email_read -- read-only message reader: one or more messages, in full.
 Read-only by construction: the only calls this script makes are messages.find
 plus the cached folders.list / grants.list lookups used to name things. It never
 sends, deletes, moves, or marks anything, and it downloads nothing unless
---save DIR is given.
+--save [DIR] is given.
 
 Usage (from the skill directory):
     uv run scripts/email_read.py <id> [<id> ...] [flags]
@@ -20,7 +20,7 @@ Usage (from the skill directory):
     <id> <id> ...         several messages, fetched concurrently
     - < ids.txt           ids from stdin, whitespace separated
     <id> -a google        pin the account instead of auto-detecting
-    <id> --save /tmp/att  save the attachments (never overwrites)
+    <id> --save [DIR]     save the attachments: DIR, or a fresh temp dir
     <id> -j               JSON output: raw HTML body, no rendering
 
 Reading several messages needs no config file: the ids are the whole input, so
@@ -40,8 +40,8 @@ Notes:
     (about 0.5s), so pass -a when you already know where the message lives.
   * Bodies arrive as HTML from every provider. The table renders them as plain
     text paragraph by paragraph, never truncated; JSON keeps the raw HTML.
-  * A live API key is needed for --save: attachment bytes are only fetched when
-    asked for, and an existing file is reported instead of overwritten.
+  * Attachments are listed only: the bytes are fetched when --save asks for
+    them, into DIR or a fresh temp directory (never overwriting a file).
   * Exit code is 1 when any requested id failed, so partial runs stay
     detectable, and 2 for a missing API key or unreadable input.
 """
@@ -49,6 +49,7 @@ Notes:
 import argparse
 import json
 import sys
+import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -430,6 +431,15 @@ def print_message(detail: MessageDetail, term_width: int) -> None:
             print(wrapped)
 
 
+def save_dir(value: str | None) -> Path | None:
+    """Where --save writes: its DIR, a fresh temp dir, or nowhere when absent."""
+    if value is None:
+        return None
+    path = Path(value) if value else Path(tempfile.mkdtemp(prefix="nylas-attachments-"))
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse and validate the command line."""
     parser = argparse.ArgumentParser(
@@ -454,8 +464,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--save",
+        nargs="?",
+        const="",
         metavar="DIR",
-        help="download the attachments into DIR (created if missing)",
+        help=(
+            "download the attachments into DIR, or into a fresh temp dir "
+            "when DIR is omitted; never overwrites an existing file"
+        ),
     )
     parser.add_argument("-j", "--json", action="store_true", help="JSON output")
     parser.add_argument(
@@ -484,12 +499,10 @@ def run(args: argparse.Namespace) -> int:
     opts = Options(
         account=args.account,
         refresh=args.refresh,
-        save=Path(args.save) if args.save else None,
+        save=save_dir(args.save),
         workers=args.workers,
     )
     ids = requested_ids(args)
-    if opts.save:
-        opts.save.mkdir(parents=True, exist_ok=True)
 
     targets, unknown = nylib.select_targets(opts.account, opts.refresh)
     errors: list[ReadError] = [
