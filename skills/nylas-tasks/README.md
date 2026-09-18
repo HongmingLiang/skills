@@ -9,7 +9,7 @@ Works with pi and any other client that supports the Agent Skills standard.
 ## Install
 
 ```bash
-npx skills add HongmingLiang/skills -s nylas-tasks -y
+npx skills add https://github.com/HongmingLiang/skills -s nylas-tasks -y
 ```
 
 `-s nylas-tasks` names the skill to install and `-y` skips the prompts.
@@ -20,6 +20,6 @@ Developed against the two official Nylas skills. From the repository that
 contains this skill, install them into the project without prompts:
 
 ```bash
-npx skills add nylas/skills -a universal -y
+npx skills add https://github.com/nylas/skills -a universal -y
 npx skills update -p -y
 ```

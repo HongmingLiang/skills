@@ -10,5 +10,5 @@ Each skill carries its own `README.md`, `SKILL.md`, rules and scripts; install a
 single one with `-s`, for example:
 
 ```bash
-npx skills add HongmingLiang/skills -s nylas-tasks -y
+npx skills add https://github.com/HongmingLiang/skills -s nylas-tasks -y
 ```
