@@ -497,7 +497,11 @@ def run(args: argparse.Namespace) -> int:
 
     if not ids:
         print("! the input contained no message ids", file=sys.stderr)
+    note = nylib.count_of(len(ids), "message")
+    started = nylib.progress_start(f"reading {note}") if ids else 0.0
     details, failures = read_all(ids, targets, opts)
+    if ids:
+        nylib.progress_done(f"{len(details)} of {note}", started)
     errors.extend(failures)
     for item in failures:
         who = item["account"] or "accounts"

@@ -443,9 +443,14 @@ def read_all(
             tasks.append((targets[index], calendar))
             owner.append(index)
 
+    calendars = nylib.count_of(len(tasks), "calendar")
+    started = nylib.progress_start(f"reading {calendars}") if tasks else 0.0
     results, failures = nylib.gather(
         lambda task: read_events(task[0], task[1], opts, window), tasks, workers=workers
     )
+    if tasks:
+        found = nylib.count_of(sum(len(rows) for rows in results if rows), "event")
+        nylib.progress_done(f"{found} from {calendars}", started)
 
     events: list[list[EventRow]] = [[] for _ in targets]
     calendar_failures: list[list[str]] = [[] for _ in targets]

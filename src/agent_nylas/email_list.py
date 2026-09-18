@@ -395,9 +395,16 @@ def run(args: argparse.Namespace) -> int:
     if not targets and not errors:
         print("! no accounts available for this API key", file=sys.stderr)
 
-    reports, failures = nylib.gather(
-        lambda grant: fetch_account(grant, opts), targets, workers=args.workers
-    )
+    def read_one_account(grant: nylib.Grant) -> AccountReport:
+        """Fetch one account, with a timing line on each side of the wait."""
+        started = nylib.progress_start(grant["email"])
+        report = fetch_account(grant, opts)
+        nylib.progress_done(
+            grant["email"], started, nylib.count_of(len(report["messages"]), "message")
+        )
+        return report
+
+    reports, failures = nylib.gather(read_one_account, targets, workers=args.workers)
     for grant, failure in zip(targets, failures):
         if failure is not None:
             message = nylib.describe_error(failure)

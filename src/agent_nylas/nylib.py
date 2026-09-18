@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 import time
 import unicodedata
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -416,6 +417,30 @@ def gather[T](
             except Exception as exc:  # noqa: BLE001 - reported verbatim to the caller
                 errors[index] = exc
     return results, errors
+
+
+def count_of(count: int, singular: str) -> str:
+    """'1 message', '3 messages' -- for a note that counts something."""
+    return f"{count} {singular}" if count == 1 else f"{count} {singular}s"
+
+
+def progress_start(label: str) -> float:
+    """Announce work on stderr and return the moment it started.
+
+    A listing through this machine's proxy takes seconds and a stalled proxy a
+    minute, and a minute of silence is indistinguishable from a hang. stdout
+    stays data, so these lines go to stderr beside the error report.
+    """
+    print(f"… {label}", file=sys.stderr, flush=True)
+    return time.monotonic()
+
+
+def progress_done(label: str, started: float, note: str = "") -> None:
+    """Close a progress_start line with what came of it and how long it took."""
+    detail = f"{label}: {note}" if note else label
+    print(
+        f"✓ {detail} in {time.monotonic() - started:.1f}s", file=sys.stderr, flush=True
+    )
 
 
 def describe_error(exc: Exception) -> str:
