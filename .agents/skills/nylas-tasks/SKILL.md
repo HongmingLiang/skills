@@ -22,9 +22,10 @@ this project's virtualenv is active). `--help` has the flags.
 | [mail-read.md](rules/mail-read.md) | read one or many, attachments, mark what you read |
 | [mail-send.md](rules/mail-send.md) | send, reply, draft, schedule -- the user approves first |
 | [mail-update.md](rules/mail-update.md) | unread, stars, move, delete |
+| [calendar-list.md](rules/calendar-list.md) | find time: events and calendars |
+| [calendar-write.md](rules/calendar-write.md) | create, update, delete, answer an invitation |
 
-Search, calendar listing and calendar writes are routed below but not written up
-yet: use `--help`.
+Search is routed below but not written up yet: use `--help`.
 
 ## Mail
 
@@ -44,11 +45,12 @@ yet: use `--help`.
 
 | Job | Tool | Command |
 | --- | --- | --- |
-| Read: upcoming events | script | `event_list.py --days 7`, `-c <calendar>`, `--expand`, `--calendars` |
-| Read: one event, calendars, free time | CLI | `nylas calendar events show <id>`, `nylas calendar list`, `nylas calendar availability`, `nylas calendar find-time` |
-| Create: event, invitation | CLI | `nylas calendar events create -t T -s "2026-01-15 14:00" -p a@b.c` |
-| Update: fields, series, answering | CLI | `nylas calendar events update <id>`, `nylas calendar recurring`, `nylas calendar events rsvp <id>` |
-| Delete: event | CLI | `nylas calendar events delete <id>` |
+| Read: upcoming events | script | `event_list.py --days 7`, `-c <calendar>`, `--expand`, `--calendars` -> [rule](rules/calendar-list.md) |
+| Read: one event, or a calendar as JSON | CLI | `nylas calendar events show <id>`, `nylas calendar events import` -> [rule](rules/calendar-list.md) |
+| Create: event | CLI | `nylas calendar events create -t T -s "2026-01-15 14:00"` -> [rule](rules/calendar-write.md) |
+| Update: fields, one instance of a series | CLI | `nylas calendar events update <id>`, `nylas calendar recurring` -> [rule](rules/calendar-write.md) |
+| Update: answering an invitation | CLI | `nylas calendar events rsvp <id> yes\|no\|maybe` -> [rule](rules/calendar-write.md) |
+| Delete: event, instance | CLI | `nylas calendar events delete <id> -f`, `nylas calendar recurring delete <id> -c <cal> -y` -> [rule](rules/calendar-write.md) |
 
 ```bash
 # the two things asked for most
@@ -64,9 +66,13 @@ uv run src/agent_nylas/event_list.py --days 7
   progress lines that slow runs print so a wait is not silent.
 * Anything that leaves the mailbox (send, reply, draft-send, scheduled send) or
   destroys mail (delete) happens only after the user has seen what will happen
-  and said go. `-y` and `-f` come after that approval, never instead of it: the
+  and said go -- and so does an RSVP, the one calendar call that mails the
+  organizer. `-y` and `-f` come after that approval, never instead of it: the
   CLI's own prompts are inert without a terminal, and they exit `0` when they
   cancel.
+* Events stay personal: never pass `-p/--participant` (or invite anyone
+  otherwise) -- an event with participants emails them an invitation, and this
+  repo only schedules the user's own time.
 * The CLI acts on the active grant (here `hongming.liang@outlook.com`, per
   `nylas auth list`) unless the account is passed. The scripts find each id's
   account themselves, which is why ids from different accounts mix freely
