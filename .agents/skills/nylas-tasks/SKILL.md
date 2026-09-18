@@ -31,11 +31,12 @@ yet: use `--help`.
 | Job | Tool | Command |
 | --- | --- | --- |
 | Read: list and filter | script | `email_list.py -u --days 3 -a pku` -> [rule](rules/mail-list.md) |
+| Read: folders, counts and ids | script | `email_list.py --folders` (one request per account, no messages) -> [rule](rules/mail-list.md) |
 | Read: one or many in full, attachments | script | `email_read.py <id> <id>`, `email_read.py -` (stdin), `--save DIR` -> [rule](rules/mail-read.md) |
 | Read: sender, subject, attachment filters | CLI | `nylas email search --from ... --has-attachment`, `nylas email search "invoice"` |
 | Create: send, reply, draft, schedule | CLI | `nylas email send --to A --subject S --body B -y`, `nylas email reply <id> --body B -y`, `nylas email drafts`, `nylas email scheduled` -> [rule](rules/mail-send.md) |
 | Update: mark read after reading | CLI | `nylas email mark read <id>`, `nylas email threads mark <thread-id> --read` -> [rule](rules/mail-read.md) |
-| Update: unread, star, move, folders | CLI | `nylas email mark unread\|starred <id>`, `nylas email move <id> --folder <folder-id>` -> [rule](rules/mail-update.md) |
+| Update: unread, star, move, folders | CLI | `nylas email mark unread\|starred <id>`, `nylas email move <id> --folder <folder-id>` (ids from `email_list.py --folders`) -> [rule](rules/mail-update.md) |
 | Update: tracking, metadata, threads | CLI | `nylas email tracking-info <id>`, `nylas email metadata`, `nylas email threads` |
 | Delete: message, thread | CLI | `nylas email delete <id> -f`, `nylas email threads delete <id> -f` -> [rule](rules/mail-update.md) |
 
@@ -50,7 +51,7 @@ yet: use `--help`.
 | Delete: event | CLI | `nylas calendar events delete <id>` |
 
 ```bash
-# the two things this repo is asked for most
+# the two things asked for most
 uv run src/agent_nylas/email_list.py -u --days 3 --ids | uv run src/agent_nylas/email_read.py -
 uv run src/agent_nylas/event_list.py --days 7
 ```
@@ -58,7 +59,9 @@ uv run src/agent_nylas/event_list.py --days 7
 ## Ground rules
 
 * Exit codes: `0` ok, `1` something failed (the rest of the output is still
-  usable, failures on stderr), `2` bad arguments or environment. stdout is data.
+  usable, failures on stderr), `2` bad arguments or environment. stdout is data;
+  stderr also carries the `… <account>` / `✓ <account>: 2 messages in 0.9s`
+  progress lines that slow runs print so a wait is not silent.
 * Anything that leaves the mailbox (send, reply, draft-send, scheduled send) or
   destroys mail (delete) happens only after the user has seen what will happen
   and said go. `-y` and `-f` come after that approval, never instead of it: the
@@ -74,9 +77,6 @@ uv run src/agent_nylas/event_list.py --days 7
 * In the scripts `-a` takes one comma-separated value of `all`, an email
   substring (`outlook`, `pku`), a provider (`google`, `imap`) or a grant id, and
   does not accumulate: `-a gmail -a pku` keeps only `pku`.
-* `jq` is not installed: parse `-j` with `python3 -c` (stdlib) or pipe `--ids`
-  into `email_read.py`. Flags must not sit between two ids
-  (`email_read.py <id> -j <id>` fails): first or last.
 * Keep the read-only guarantee when extending the scripts -- the only API calls
   are `messages.list`/`find`, `folders.list`, `grants.list`, `events.list` -- and
   run `uv run pyright` plus `uvx ruff check src/agent_nylas` after editing.

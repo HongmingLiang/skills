@@ -18,7 +18,7 @@ nylas email mark starred <message-id>        # unstarred takes it off again
 nylas email threads mark <thread-id> --unread
 
 # move: --folder takes an ID, so ask for ids first
-nylas email folders list hongming.liang@outlook.com --id
+uv run src/agent_nylas/email_list.py --folders -a outlook
 nylas email move <message-id> --folder <folder-id>
 nylas email move <message-id> --archive      # clears every folder/label
 
@@ -36,8 +36,9 @@ nylas email threads delete <thread-id> -f
   go": confirm the target first, the way [mail-send.md](mail-send.md) does for
   sending. Marks and moves need no such gate.
 * One target per call and no prompt; a batch is a loop, one call per target.
-* `move --folder` wants a folder **ID**; `--archive` clears every folder and
-  label. Nothing here undoes in one step, but moving back is one more call.
+* `move --folder` wants a folder **ID** -- `email_list.py --folders` prints them;
+  `--archive` clears every folder and label. Nothing here undoes in one step, but
+  moving back is one more call.
 
 All the flags: `nylas email mark --help`, `nylas email threads mark --help`,
 `nylas email move --help`, `nylas email delete --help`.

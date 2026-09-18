@@ -28,9 +28,8 @@ for a in json.load(sys.stdin)["accounts"]:
     for m in a["messages"]:
         print(m["date_iso"], m["sender_email"], m["subject"])'
 
-# is anything unread anywhere? ask for folder counts, not messages: one request
-# per account, and the UNREAD column answers it
-nylas email folders list
+# is anything unread anywhere? folders with their counts and ids, no messages
+uv run src/agent_nylas/email_list.py --folders
 ```
 
 ## What to know
@@ -46,10 +45,13 @@ nylas email folders list
 * `--days N` filters server-side (`--days 0` matches nothing), and the count in
   the header is what the run fetched, not what the folder holds.
 * `-j` rows carry `date` (Unix seconds) and `date_iso` (local): use `date_iso`.
+* `--folders` lists what exists -- name, total, unread, id -- and reads no
+  messages. It reads the folder list live (its counts are the point) at one
+  request per account, and its ids are what `-f` and `nylas email move --folder`
+  accept; `-j` prints them as JSON.
 * `--all-folders --all --max 50` is the heaviest form of all (8-78s measured
-  here) -- only when the answer really has to cover every folder. The folder
-  counts above answer "is anything unread", and the folder cache a run leaves in
-  `~/.cache/email-helper/` answers it for free but only as fresh as that run.
+  here) -- only when the answer really has to cover every folder, since the
+  folder counts above answer "is anything unread" instead.
 
 ## When it is not enough
 
