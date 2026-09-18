@@ -48,7 +48,6 @@ Notes:
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 import time
 from collections.abc import Sequence
@@ -518,11 +517,6 @@ def print_calendars(account: AccountCalendars) -> None:
         )
 
 
-def plural(count: int, noun: str) -> str:
-    """'1 event' vs '3 events', so the header reads as English."""
-    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
-
-
 def public_row(row: EventRow) -> dict[str, Any]:
     """The JSON form of a row. sort_key and series_key are internal aids."""
     return {
@@ -536,7 +530,7 @@ def print_account(report: AccountReport, opts: Options, term_width: int) -> None
     """Render one account's events as a plain-text block."""
     print(
         f"\n=== {report['email']} [{report['provider']}]"
-        f" - {plural(report['count'], 'event')} ==="
+        f" - {nylib.count_of(report['count'], 'event')} ==="
     )
     if report["skipped"]:
         print(
@@ -672,15 +666,10 @@ def run(args: argparse.Namespace) -> int:
     )
     window = build_window(opts)
 
-    grants = nylib.load_grants(refresh=opts.refresh)
-    targets, unknown = nylib.select_grants(grants, opts.account)
-
+    targets, unknown = nylib.select_targets(opts.account, opts.refresh)
     errors: list[dict[str, str]] = [
-        {"account": term, "error": "no account matches this selector"}
-        for term in unknown
+        {"account": term, "error": nylib.NO_ACCOUNT} for term in unknown
     ]
-    for item in errors:
-        print(f"! {item['account']}: {item['error']}", file=sys.stderr)
     if not targets and not errors:
         print("! no accounts available for this API key", file=sys.stderr)
 
@@ -694,27 +683,17 @@ def run(args: argparse.Namespace) -> int:
             print(f"! {report['email']}: {failure}", file=sys.stderr)
 
     if args.json:
-        print(
-            json.dumps(
-                {
-                    "generated_at": nylib.now_iso(),
-                    "window": {
-                        "since": nylib.ts_iso(window.since),
-                        "until": nylib.ts_iso(window.until),
-                        "days": window.days,
-                    },
-                    "accounts": [
-                        {
-                            **report,
-                            "events": [public_row(row) for row in report["events"]],
-                        }
-                        for report in reports
-                    ],
-                    "errors": errors,
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
+        nylib.print_json_report(
+            [
+                {**report, "events": [public_row(row) for row in report["events"]]}
+                for report in reports
+            ],
+            errors,
+            window={
+                "since": nylib.ts_iso(window.since),
+                "until": nylib.ts_iso(window.until),
+                "days": window.days,
+            },
         )
     else:
         if not reports:
@@ -733,28 +712,10 @@ def report_calendars(
     as_json: bool,
 ) -> int:
     """--calendars: list what exists, including what a read would skip."""
-    results, failures = nylib.gather(lambda grant: list_calendars(grant, opts), targets)
-    accounts: list[Any] = []
-    for grant, listing, failure in zip(targets, results, failures):
-        if failure is not None:
-            message = nylib.describe_error(failure)
-            errors.append({"account": grant["email"], "error": message})
-            print(f"! {grant['email']}: {message}", file=sys.stderr)
-            continue
-        accounts.append(listing)
+    accounts = nylib.collect(targets, lambda grant: list_calendars(grant, opts), errors)
 
     if as_json:
-        print(
-            json.dumps(
-                {
-                    "generated_at": nylib.now_iso(),
-                    "accounts": accounts,
-                    "errors": errors,
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
+        nylib.print_json_report(accounts, errors)
     else:
         for account in accounts:
             print_calendars(account)

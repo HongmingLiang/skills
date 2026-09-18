@@ -275,6 +275,28 @@ def select_grants(
     return matched, missing
 
 
+# The one sentence an unmatched selector gets, so the line printed on stderr and
+# the error a view puts in its payload cannot drift apart.
+NO_ACCOUNT = "no account matches this selector"
+
+
+def select_targets(
+    selector: str, refresh: bool = False
+) -> tuple[list[Grant], list[str]]:
+    """Load the grants, apply the selector, and report what matched nothing.
+
+    Returns the selected grants and the terms that matched no account, which each
+    view names in its own error payload. The stderr line for those terms is
+    printed here, so all three views report a bad selector the same way.
+    """
+    targets, unknown = select_grants(load_grants(refresh=refresh), selector)
+    for term in unknown:
+        print(f"! {term}: {NO_ACCOUNT}", file=sys.stderr)
+    if not targets and not unknown:
+        print("! no accounts available for this API key", file=sys.stderr)
+    return targets, unknown
+
+
 # ----------------------------------------- 4. identity: folders and calendars
 
 
@@ -417,6 +439,52 @@ def gather[T](
             except Exception as exc:  # noqa: BLE001 - reported verbatim to the caller
                 errors[index] = exc
     return results, errors
+
+
+def collect(
+    targets: list[Grant],
+    fetch: Callable[[Grant], Any],
+    errors: list[dict[str, str]],
+    workers: int = config.DEFAULT_WORKERS,
+) -> list[Any]:
+    """Run fetch once per account and keep the survivors, in account order.
+
+    gather()'s reporting companion: same per-account concurrency, but a failure is
+    printed and recorded instead of returned, so a broken account never cancels
+    the others and every view reports it the same way.
+    """
+    results, failures = gather(fetch, targets, workers=workers)
+    collected: list[Any] = []
+    for grant, result, failure in zip(targets, results, failures):
+        if failure is not None:
+            message = describe_error(failure)
+            errors.append({"account": grant["email"], "error": message})
+            print(f"! {grant['email']}: {message}", file=sys.stderr)
+            continue
+        collected.append(result)
+    return collected
+
+
+def print_json_report(
+    accounts: list[Any], errors: list[dict[str, str]], **extra: Any
+) -> None:
+    """The JSON envelope every view prints: accounts, plus what failed.
+
+    `extra` carries the keys a mode adds for itself (the event window), between
+    the timestamp and the accounts, so the envelope stays in one place.
+    """
+    print(
+        json.dumps(
+            {
+                "generated_at": now_iso(),
+                **extra,
+                "accounts": accounts,
+                "errors": errors,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 def count_of(count: int, singular: str) -> str:

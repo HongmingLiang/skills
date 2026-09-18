@@ -39,7 +39,6 @@ Notes:
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 import time
 from collections.abc import Sequence
@@ -363,17 +362,6 @@ def print_folders(account: AccountFolders, opts: Options) -> None:
         )
 
 
-def print_json_report(accounts: list[Any], errors: list[dict[str, str]]) -> None:
-    """The JSON envelope both modes print: what was read, and what failed."""
-    print(
-        json.dumps(
-            {"generated_at": nylib.now_iso(), "accounts": accounts, "errors": errors},
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
-
-
 def report_folders(
     targets: list[nylib.Grant],
     opts: Options,
@@ -381,18 +369,10 @@ def report_folders(
     as_json: bool,
 ) -> int:
     """--folders: list what exists, including the counts, and read no messages."""
-    results, failures = nylib.gather(lambda grant: list_folders(grant), targets)
-    accounts: list[Any] = []
-    for grant, listing, failure in zip(targets, results, failures):
-        if failure is not None:
-            message = nylib.describe_error(failure)
-            errors.append({"account": grant["email"], "error": message})
-            print(f"! {grant['email']}: {message}", file=sys.stderr)
-            continue
-        accounts.append(listing)
+    accounts = nylib.collect(targets, list_folders, errors)
 
     if as_json:
-        print_json_report(accounts, errors)
+        nylib.print_json_report(accounts, errors)
     else:
         if not accounts:
             print("! nothing to show", file=sys.stderr)
@@ -500,15 +480,10 @@ def run(args: argparse.Namespace) -> int:
         ids=args.ids,
     )
 
-    grants = nylib.load_grants(refresh=opts.refresh)
-    targets, unknown = nylib.select_grants(grants, opts.account)
-
+    targets, unknown = nylib.select_targets(opts.account, opts.refresh)
     errors: list[dict[str, str]] = [
-        {"account": term, "error": "no account matches this selector"}
-        for term in unknown
+        {"account": term, "error": nylib.NO_ACCOUNT} for term in unknown
     ]
-    for item in errors:
-        print(f"! {item['account']}: {item['error']}", file=sys.stderr)
     if not targets and not errors:
         print("! no accounts available for this API key", file=sys.stderr)
 
@@ -524,17 +499,10 @@ def run(args: argparse.Namespace) -> int:
         )
         return report
 
-    reports, failures = nylib.gather(read_one_account, targets, workers=args.workers)
-    for grant, failure in zip(targets, failures):
-        if failure is not None:
-            message = nylib.describe_error(failure)
-            errors.append({"account": grant["email"], "error": message})
-            print(f"! {grant['email']}: {message}", file=sys.stderr)
-
-    accounts: list[Any] = [report for report in reports if report is not None]
+    accounts = nylib.collect(targets, read_one_account, errors, workers=args.workers)
 
     if args.json:
-        print_json_report(accounts, errors)
+        nylib.print_json_report(accounts, errors)
     else:
         if not accounts:
             print("! nothing to show", file=sys.stderr)

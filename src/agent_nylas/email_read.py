@@ -485,15 +485,10 @@ def run(args: argparse.Namespace) -> int:
     if opts.save:
         opts.save.mkdir(parents=True, exist_ok=True)
 
-    grants = nylib.load_grants(refresh=opts.refresh)
-    targets, unknown = nylib.select_grants(grants, opts.account)
-
+    targets, unknown = nylib.select_targets(opts.account, opts.refresh)
     errors: list[ReadError] = [
-        ReadError(id=None, account=term, error="no account matches this selector")
-        for term in unknown
+        ReadError(id=None, account=term, error=nylib.NO_ACCOUNT) for term in unknown
     ]
-    for item in errors:
-        print(f"! {item['account']}: {item['error']}", file=sys.stderr)
 
     if not ids:
         print("! the input contained no message ids", file=sys.stderr)
