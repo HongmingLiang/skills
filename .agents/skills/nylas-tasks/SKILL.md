@@ -1,6 +1,6 @@
 ---
 name: nylas-tasks
-description: "Pick the right tool for mail and calendar work in this repo: the read-only scripts in src/agent_nylas (email_list.py, email_read.py, event_list.py) for listing and reading, the nylas CLI for everything that writes. Use when the user asks to see unread mail, read a message or its attachments, search mail, list upcoming events or 日程, or to send, reply to, delete, move, mark, schedule or RSVP mail and calendar events (发邮件, 回复, 删除邮件, 改日程)."
+description: "Pick the right tool for mail and calendar work in this repo: the read-only scripts in src/agent_nylas (email_list.py, email_read.py, event_list.py) for listing and reading, the nylas CLI for everything that writes. Use when the user asks to see unread mail, read a message or its attachments, search mail, list upcoming events, or to send, reply to, delete, move, mark, schedule or RSVP mail and calendar events."
 ---
 
 # Mail and calendar: pick the tool, then read the rule for it
@@ -22,16 +22,17 @@ for their flags. Details live in `rules/`:
 | Read this | When |
 | --- | --- |
 | [rules/mail-list.md](rules/mail-list.md) | mail list and query: the recipes you will actually use, plus the gotchas |
+| [rules/mail-send.md](rules/mail-send.md) | sending, replying, drafts and scheduled sends -- and the approval rule that every one of them needs first |
 
-The other paths (read a message, search, send/delete/mark, calendar list,
-calendar writes) are routed by the tables below but not written up yet, so use
-`--help` for their flags.
+The other paths (read a message, search, delete/mark, calendar list, calendar
+writes) are routed by the tables below but not written up yet, so use `--help`
+for their flags.
 
 ## Mail
 
 | Job | Tool | Command |
 | --- | --- | --- |
-| Create: send, reply, draft, schedule | CLI | `nylas email send --to A --subject S --body B`, `nylas email reply <id> --body B`, `nylas email drafts`, `nylas email scheduled` |
+| Create: send, reply, draft, schedule | CLI | `nylas email send --to A --subject S --body B -y`, `nylas email reply <id> --body B -y`, `nylas email drafts`, `nylas email scheduled` -> [rules/mail-send.md](rules/mail-send.md) |
 | Delete: message, thread | CLI | `nylas email delete <id>`, `nylas email threads delete <id>` |
 | Read: list and filter | script | `email_list.py -u --days 3 -a pku` -> [rules/mail-list.md](rules/mail-list.md) |
 | Read: one or many messages in full | script | `email_read.py <id> [<id> ...]`, `email_read.py -` takes ids from stdin |
@@ -76,6 +77,11 @@ uv run src/agent_nylas/event_list.py --days 7
   pipe `--ids` into `email_read.py`.
 * Flags must not sit between two ids (`email_read.py <id> -j <id>` fails): give
   flags first or last.
+* Anything that leaves the mailbox -- send, reply, forward, draft-send, scheduled
+  send -- happens only after the user has seen the exact text (account,
+  recipients, subject, body) and said go; `-y` comes after that approval, never
+  instead of it, because the CLI's own prompt is inert without a terminal. See
+  [rules/mail-send.md](rules/mail-send.md).
 * Keep the read-only guarantee when extending the scripts: the only API calls
   are `messages.list`/`find`, `folders.list`, `grants.list` and `events.list`.
   Anything that writes belongs to the CLI. After editing, run `uv run pyright`
