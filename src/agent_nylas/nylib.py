@@ -537,7 +537,7 @@ def wrap(text: str | None, width: int) -> list[str]:
     """Wrap text into lines of at most `width` display columns.
 
     Breaks at whitespace when possible. Runs that cannot fit on a line by
-    themselves -- a URL, or Chinese text without spaces -- are hard-split, so a
+    themselves -- a URL, or CJK text without spaces -- are hard-split, so a
     line never exceeds the width.
     """
     if width <= 1:

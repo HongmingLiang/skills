@@ -13,7 +13,7 @@ Usage (from the repository root):
     --since 2026-01-01    window start (default: now)
     --calendars           list calendars and their ids, read nothing
     -c Work -c Education  only these calendars
-    --include-cjk         also read the Chinese-named calendars
+    --include-cjk         also read calendars with CJK names
     --exclude Event       skip calendars whose name matches
     --expand              one row per occurrence, not per series
     --ids                 print event ids for follow-up CLI actions
@@ -23,7 +23,7 @@ Usage (from the repository root):
 Scope: only the Microsoft (Outlook) account is read. Other grants are left
 alone unless asked for with -a, and their calendars are out of scope for now.
 
-Calendars with Chinese names are skipped by default, because in this account
+Calendars with CJK names are skipped by default, because in this account
 those are a localized mirror of the primary calendar and a read-only holiday
 feed; the requested workflows live in the English-named calendars. The skip is
 always reported, and --include-cjk turns it off.
@@ -181,10 +181,10 @@ def build_window(opts: Options) -> Window:
 
 
 def has_cjk(text: str | None) -> bool:
-    """True when the text contains CJK (Chinese, Japanese or Korean) ideographs.
+    """True when the text contains CJK ideographs.
 
     CJK ideographs, including extensions and compatibility forms, are how a
-    calendar named in Chinese is recognised without hardcoding any name.
+    localized calendar name is recognised without hardcoding any name.
     """
     ranges = ((0x3400, 0x4DBF), (0x4E00, 0x9FFF), (0xF900, 0xFAFF), (0x20000, 0x2FA1F))
     return any(any(lo <= ord(ch) <= hi for lo, hi in ranges) for ch in (text or ""))
@@ -193,12 +193,12 @@ def has_cjk(text: str | None) -> bool:
 def skip_reason(calendar: nylib.Calendar, opts: Options) -> str | None:
     """Why this calendar is not read, or None when it is.
 
-    A localized (Chinese-named) calendar is skipped by default, which keeps a
+    A localized (CJK-named) calendar is skipped by default, which keeps a
     country-specific holiday feed and a localized mirror of the primary
     calendar out of the way; --include-cjk reads them anyway.
     """
     if not opts.include_cjk and has_cjk(calendar["name"]):
-        return "chinese name"
+        return "cjk name"
     for pattern in opts.exclude:
         if pattern.strip().lower() in calendar["name"].lower():
             return f"excluded by {pattern!r}"
@@ -610,7 +610,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--include-cjk",
         action="store_true",
-        help="also read calendars with Chinese names (skipped by default)",
+        help="also read calendars with CJK names (skipped by default)",
     )
     parser.add_argument(
         "--expand",
