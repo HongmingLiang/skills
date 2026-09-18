@@ -1,68 +1,34 @@
 # agent-nylas
 
-Read-only Nylas mail and calendar scripts, packaged as an agent skill for pi and
-other Agent Skills clients.
-
-Everything here lists and reads: the only API calls are `messages.list`,
-`messages.find`, `folders.list`, `grants.list`, and `events.list`. Sending,
-replying, deleting, moving, starring, and RSVPing are done with the `nylas` CLI,
-and the skill points at the rule file for each of those paths.
-
-## Layout
-
-| Path | What it is |
-| --- | --- |
-| `skills/nylas-tasks/` | The skill authored here: `SKILL.md`, on-demand `rules/`, and its `scripts/` |
-| `skills/nylas-tasks/scripts/` | `email_list.py`, `email_read.py`, `event_list.py` |
-| `.agents/skills/` | Discovery and install directory: a symlink to the skill above (tracked) plus installed third-party skills (ignored) |
+Read-only Nylas mail and calendar scripts, packaged as the `nylas-tasks` skill
+for pi and other Agent Skills clients. Everything here lists and reads; sending,
+replying, deleting, moving and RSVPing are left to the `nylas` CLI.
 
 ## Use
 
-With [uv](https://docs.astral.sh/uv/) and the `nylas` CLI installed. Paths are
-relative to the skill directory, and each script declares its own dependencies,
-so it runs wherever the skill is installed:
+The skill lives in `skills/nylas-tasks` (discovered through the
+`.agents/skills/nylas-tasks` symlink) and needs a Nylas API key in
+`NYLAS_FILE_STORE_PASSPHRASE`. Each script declares its own dependencies, so
+[uv](https://docs.astral.sh/uv/) can run it from anywhere:
 
 ```bash
 cd skills/nylas-tasks
-uv run scripts/email_list.py             # newest 10 per account
-uv run scripts/email_list.py -u --days 3 # unread, last three days
-uv run scripts/email_read.py <message-id>
-uv run scripts/event_list.py --days 7
+uv run scripts/email_list.py            # newest mail per account
+uv run scripts/email_read.py <id>       # one message in full
+uv run scripts/event_list.py --days 7   # upcoming events
 ```
 
-Each script takes `--help`. `skills/nylas-tasks/rules/` documents the flags and
-the CLI fallbacks in more detail.
-
-## Environment
-
-| Variable | Used for |
-| --- | --- |
-| `NYLAS_FILE_STORE_PASSPHRASE` | Nylas API key, shared with the `nylas` CLI |
-| `NYLAS_API_URI` | Override the endpoint (default `https://api.us.nylas.com`) |
-| `NYLAS_CALENDAR_ACCOUNT` | Default account for `event_list.py` when `-a` is absent (default `microsoft`) |
-| `XDG_CACHE_HOME` | Where the cached grant/folder/calendar ids live (default `~/.cache/nylas-tasks`) |
+Each script takes `--help`; `SKILL.md` and its `rules/` hold the flags and the
+CLI fallbacks.
 
 ## Development
 
-```bash
-uv run pyright
-uvx ruff check skills
-```
-
-The entry scripts repeat the dependency pins inline (PEP 723) so the skill runs
-standalone; keep them in sync with `[project].dependencies` in `pyproject.toml`.
-
-### Third-party skills
-
-`nylas-api` and `nylas-cli` are dev-time reference skills from
-[nylas/skills](https://github.com/nylas/skills). Neither they nor the local pin
-file are tracked: `skills-lock.json` and `.agents/skills/` are git-ignored, so a
-fresh clone installs them once.
+The two official Nylas skills are installed for reference while developing this
+one, and are not tracked here:
 
 ```bash
-npx skills add nylas/skills -a universal -y   # install or refresh
-npx skills update                             # move to the upstream latest
+npx skills add nylas/skills -a universal -y
 ```
 
-`-a universal` keeps the install inside `.agents/skills/`; without it the CLI
-targets Pi and writes symlinks into `.pi/skills/`.
+`-a universal` keeps the install inside `.agents/skills/` -- without it the CLI
+targets Pi and writes into `.pi/skills/`. Refresh them with `npx skills update`.
