@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 email_read -- read-only message reader: one or more messages, in full.
 

@@ -139,8 +139,17 @@ def client() -> nylas.Client:
                 f"{config.API_KEY_ENV} is not set\n"
                 f"hint: export {config.API_KEY_ENV}=$(nylas auth token)"
             )
-        import nylas
-        from nylas.handler import http_client as sdk_http
+        try:
+            import nylas
+            from nylas.handler import http_client as sdk_http
+        except ImportError as exc:
+            # A bare `python3` outside this project's virtualenv gets here; say
+            # what to do instead of dying on a ModuleNotFoundError traceback.
+            raise ConfigError(
+                f"the Nylas SDK is not importable ({exc})\n"
+                "hint: run this command with uv, e.g. "
+                "uv run src/agent_nylas/email_list.py"
+            ) from exc
 
         # Swap the SDK's HTTP seam for one pooled, retrying Session. This is the
         # widest and most stable seam available: it covers every SDK resource,

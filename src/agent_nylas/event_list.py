@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 event_list -- read-only event viewer for the Outlook account, built on the Nylas
 Python SDK.

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 email_list -- read-only mail viewer for every account, built on the Nylas Python SDK.
 
