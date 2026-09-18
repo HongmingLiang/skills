@@ -34,7 +34,9 @@ and attachment filters), `nylas email tracking-info\|metadata\|threads`.
 
 * Exit codes `0` ok, `1` partial failure (the output is still usable, failures go
   to stderr), `2` bad arguments or environment. stdout is data, the `…` / `✓`
-  progress lines are stderr.
+  progress lines are stderr. An environment failure -- `uv` or `nylas` missing,
+  `NYLAS_FILE_STORE_PASSPHRASE` unset, the CLI reporting `API key not
+  configured` -- is in [reference/setup.md](reference/setup.md).
 * Sends, drafts, scheduled sends, deletes and RSVPs -- the one calendar call that
   mails the organizer -- happen only after the user has seen what will happen and
   said go: `-y`/`-f` follow that approval, never replace it, and the CLI's own

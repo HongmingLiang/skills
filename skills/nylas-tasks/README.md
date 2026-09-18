@@ -14,6 +14,9 @@ npx skills add https://github.com/HongmingLiang/skills -s nylas-tasks -y
 
 `-s nylas-tasks` names the skill to install and `-y` skips the prompts.
 
+`uv` and the `nylas` CLI are prerequisites, and both read the same API key
+variable: [reference/setup.md](reference/setup.md).
+
 ## Development
 
 Developed against the two official Nylas skills. From the repository that
