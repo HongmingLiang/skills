@@ -2,6 +2,7 @@
 name = "agent-nylas"
 version = "0.1.0"
 description = "Read-only Nylas mail and calendar scripts, packaged as an agent skill"
+license = "MIT"
 readme = "README.md"
 authors = [
     { name = "HongmingLiang", email = "hm.liang.dev@outlook.com" }
