@@ -1,28 +1,28 @@
 [project]
-name = "agent-nylas"
+name = "skills"
 version = "0.1.0"
-description = "Read-only Nylas mail and calendar scripts, packaged as an agent skill"
+description = "Agent skills for Agent Skills clients"
 license = "MIT"
 readme = "README.md"
 authors = [
     { name = "HongmingLiang", email = "hm.liang.dev@outlook.com" }
 ]
 requires-python = ">=3.14"
-# Dev and type-check environment. The entry scripts under
-# skills/nylas-tasks/scripts repeat these pins inline (PEP 723) so the skill
-# runs standalone; keep the two in sync.
-dependencies = [
+
+# Development environment only. Every skill ships its own dependencies inline
+# (PEP 723) and runs standalone, so this group exists for type checking and
+# tooling; add a Python skill's dependencies here when it joins the repo.
+[dependency-groups]
+dev = [
     "nylas>=6.17.0",
+    "pyright>=1.1.414",
     "requests>=2.32",
 ]
 
 [tool.ruff]
-# Skip installed third-party skills under .agents. The scripts authored in this
-# repo are linted through skills/nylas-tasks/scripts.
+# Installed third-party skills live under .agents and are not ours to lint.
 extend-exclude = [".agents"]
 
 [tool.pyright]
-include = ["skills/nylas-tasks/scripts"]
-extraPaths = ["skills/nylas-tasks/scripts"]
 venvPath = "."
 venv = ".venv"

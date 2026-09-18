@@ -9,7 +9,4 @@ dist/
 uv.lock
 skills-lock.json
 
-# Installed skills (pi, npx skills, ...) land here; only the skill authored in
-# this repo is tracked, as a symlink, so project-scope discovery keeps working.
 .agents/skills/*
-!.agents/skills/nylas-tasks
