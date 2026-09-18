@@ -3,6 +3,7 @@ name: nylas-tasks
 description: "Pick the right tool for mail and calendar work: the read-only scripts shipped with this skill (email_list.py, email_read.py, event_list.py) for listing and reading, the nylas CLI for everything that writes. Use when the user asks to see unread mail, read a message or its attachments, search mail, list upcoming events, or to send, reply, delete, move, mark, schedule or RSVP mail and calendar events."
 compatibility: "uv for the scripts (each declares its own dependencies); the nylas CLI v3.1.29 for everything else."
 license: MIT
+disable-model-invocation: true
 ---
 
 # Mail and calendar: pick the tool, then read its rule
