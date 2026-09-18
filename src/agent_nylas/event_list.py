@@ -1,4 +1,3 @@
-#!/usr/bin/env -S uv run
 """
 event_list -- read-only event viewer for the Outlook account, built on the Nylas
 Python SDK.
@@ -6,18 +5,19 @@ Python SDK.
 Read-only guarantee: the only API call this script makes is events.list, so it
 never creates, updates, deletes, or answers an event.
 
-Usage:
-    ./event_list.py                           every calendar, next 365 days
-    ./event_list.py --days 30                 shorter window
-    ./event_list.py --since 2026-01-01        window start (default: now)
-    ./event_list.py --calendars               list calendars and their ids, read nothing
-    ./event_list.py -c Work -c Education      only these calendars
-    ./event_list.py --include-cjk             also read the Chinese-named calendars
-    ./event_list.py --exclude Event           skip calendars whose name matches
-    ./event_list.py --expand                  one row per occurrence, not per series
-    ./event_list.py --ids                     print event ids for follow-up CLI actions
-    ./event_list.py -j                        JSON output for piping
-    ./event_list.py --refresh                 ignore the cached calendar lists
+Usage (from the repository root):
+    uv run src/agent_nylas/event_list.py [flags]
+    (no flags)            every calendar, next 365 days
+    --days 30             shorter window
+    --since 2026-01-01    window start (default: now)
+    --calendars           list calendars and their ids, read nothing
+    -c Work -c Education  only these calendars
+    --include-cjk         also read the Chinese-named calendars
+    --exclude Event       skip calendars whose name matches
+    --expand              one row per occurrence, not per series
+    --ids                 print event ids for follow-up CLI actions
+    -j                    JSON output for piping
+    --refresh             ignore the cached calendar lists
 
 Scope: only the Microsoft (Outlook) account is read. Other grants are left
 alone unless asked for with -a, and their calendars are out of scope for now.

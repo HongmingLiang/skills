@@ -1,26 +1,28 @@
-#!/usr/bin/env -S uv run
 """
 email_list -- read-only mail viewer for every account, built on the Nylas Python SDK.
 
 Read-only guarantee: the only API call this script makes is messages.list, so it
 never sends, deletes, moves, or marks anything.
 
-Usage:
-    ./email_list.py                               every account, newest 10 in the inbox
-    ./email_list.py -n 20                         newest 20 per account
-    ./email_list.py -u                            unread only
-    ./email_list.py -a outlook                    one account: outlook | gmail | pku | email
-    ./email_list.py -f dev                        one folder, by name
-    ./email_list.py -a outlook --all-folders      every folder (Outlook subfolders included)
-    ./email_list.py --days 3                      only mail received in the last 3 days
-    ./email_list.py --all --max 50                paginate, at most 50 per account
-    ./email_list.py --ids                         bare message ids, one per line (for piping)
-    ./email_list.py -j                            JSON output for piping
-    ./email_list.py --refresh                     ignore the cached account/folder lists
+Usage (from the repository root):
+    uv run src/agent_nylas/email_list.py [flags]
+    (no flags)                every account, newest 10 in the inbox
+    -n 20                     newest 20 per account
+    -u                        unread only
+    -a outlook                one account: outlook | gmail | pku | email
+    -f dev                    one folder, by name
+    -a outlook --all-folders  every folder (Outlook subfolders included)
+    --days 3                  only mail received in the last 3 days
+    --all --max 50            paginate, at most 50 per account
+    --ids                     bare message ids, one per line (for piping)
+    -j                        JSON output for piping
+    --refresh                 ignore the cached account/folder lists
 
 Output legend:  U unread   S starred, followed by sender and subject.
 
-See also: ./email_read.py reads one or more messages in full (./email_list.py -j | ./email_read.py -).
+See also: uv run src/agent_nylas/email_read.py reads one or more messages in full,
+and takes its ids from a listing:
+    uv run src/agent_nylas/email_list.py -j | uv run src/agent_nylas/email_read.py -
 
 Notes:
   * Folder names match case-insensitively, and a unique substring is enough.

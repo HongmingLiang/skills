@@ -1,4 +1,3 @@
-#!/usr/bin/env -S uv run
 """
 email_read -- read-only message reader: one or more messages, in full.
 
@@ -7,23 +6,22 @@ plus the cached folders.list / grants.list lookups used to name things. It never
 sends, deletes, moves, or marks anything, and it downloads nothing unless
 --save DIR is given.
 
-Usage:
-    ./email_read.py <id>                        one message, in full
-    ./email_read.py <id> <id> ...               several messages, fetched concurrently
-    ./email_read.py - < ids.txt                 ids from stdin, whitespace separated
-    ./email_list.py -j | ./email_read.py -      read what a listing just showed
-    ./email_read.py <id> -a outlook             pin the account instead of auto-detecting
-    ./email_read.py <id> --save /tmp/att        save the attachments (never overwrites)
-    ./email_read.py <id> -j                     JSON output: raw HTML body, no rendering
+Usage (from the repository root):
+    uv run src/agent_nylas/email_read.py <id> [<id> ...] [flags]
+    <id>                  one message, in full
+    <id> <id> ...         several messages, fetched concurrently
+    - < ids.txt           ids from stdin, whitespace separated
+    <id> -a outlook       pin the account instead of auto-detecting
+    <id> --save /tmp/att  save the attachments (never overwrites)
+    <id> -j               JSON output: raw HTML body, no rendering
 
 Reading several messages needs no config file: the ids are the whole input, so
 they are passed as arguments or piped in. `-` accepts plain ids, the JSON that
-email_list.py -j prints, or a JSON list, which means a selection is expressed with the
-listing's own filters plus jq (or a shell loop) instead of with a second query
-language implemented here:
+`email_list.py -j` prints, or a JSON list -- a selection is expressed with the
+listing's own filters instead of with a second query language implemented here:
 
-    ./email_list.py -j --days 3 | ./email_read.py -
-    ./email_list.py -j | jq -r '.accounts[].messages[] | select(.unread) | .id' | ./email_read.py -
+    uv run src/agent_nylas/email_list.py -u --days 3 --ids | uv run src/agent_nylas/email_read.py -
+    uv run src/agent_nylas/email_list.py -j --days 3 | uv run src/agent_nylas/email_read.py -
 
 Flags apply to the whole run -- none of them has a per-message variant worth a
 schema -- and ids are deduplicated, so piping a listing that repeats one is safe.
