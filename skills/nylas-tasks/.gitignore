@@ -1,0 +1,4 @@
+# Python caches (the scripts run under uv, which writes bytecode next to them)
+__pycache__/
+*.py[cod]
+.ruff_cache/
