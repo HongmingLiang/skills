@@ -32,6 +32,9 @@ and attachment filters), `nylas email tracking-info\|metadata\|threads`.
 
 ## Ground rules
 
+* Never pipe a read through `head`, `tail` or any other truncation -- a clipped
+  body, recipient or event is the information the user asked for. Narrow with
+  the flags (`-n`, `--days`, `-f`) instead.
 * Exit codes `0` ok, `1` partial failure (the output is still usable, failures go
   to stderr), `2` bad arguments or environment. stdout is data, the `…` / `✓`
   progress lines are stderr. An environment failure -- `uv` or `nylas` missing,
