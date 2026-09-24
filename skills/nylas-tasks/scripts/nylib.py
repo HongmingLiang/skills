@@ -160,8 +160,13 @@ def client() -> nylas.Client:
         # widest and most stable seam available: it covers every SDK resource,
         # including private methods we would otherwise have to mirror.
         sdk_http.requests = _PooledHttp()
+        # The SDK annotates `timeout` as int, but it hands the value straight to
+        # requests.request, which also accepts the (connect, read) pair we want;
+        # the cast only gets past that narrower annotation.
         _client = nylas.Client(
-            api_key=key, api_uri=config.API_URI, timeout=config.REQUEST_TIMEOUT_SECONDS
+            api_key=key,
+            api_uri=config.API_URI,
+            timeout=cast(Any, config.REQUEST_TIMEOUT),
         )
     return _client
 
@@ -527,7 +532,15 @@ def describe_error(exc: Exception) -> str:
             parts.append(f"request_id={exc.request_id}")
         return " | ".join(parts)
     if isinstance(exc, NylasSdkTimeoutError):
-        return f"timed out after {exc.timeout}s"
+        # The SDK stores whatever it was handed, so this is the (connect, read)
+        # pair; name the phase instead of printing the tuple.
+        timeout = exc.timeout
+        if isinstance(timeout, tuple):
+            return (
+                f"timed out after {timeout[0]}s connecting "
+                f"and {timeout[1]}s waiting for the response"
+            )
+        return f"timed out after {timeout}s"
     if isinstance(exc, requests.exceptions.RequestException):
         return f"network error: {exc.__class__.__name__}: {exc}"
     return f"{exc.__class__.__name__}: {exc}"

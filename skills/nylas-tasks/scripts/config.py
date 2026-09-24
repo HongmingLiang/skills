@@ -29,9 +29,18 @@ API_URI = os.environ.get("NYLAS_API_URI", "https://api.us.nylas.com")
 
 # ------------------------------------------------------------------------ HTTP
 
-# Seconds. A 50-message Microsoft page can need 5-10s, and a proxy in the path
-# adds more.
-REQUEST_TIMEOUT_SECONDS = 60
+# Seconds, as the (connect, read) pair requests accepts. One number cannot
+# serve both phases, because the two failure modes have nothing in common: a
+# healthy handshake finishes in 0.1-1.5s, while a 50-message Microsoft page can
+# stream for 5-10s and a proxy in the path adds more.
+#
+# Nearly every transport failure seen in practice is a TCP connect to port 443
+# that hangs until the timeout expires and then works on the next try, so the
+# connect side is short enough to fail fast and hand over to the retry below.
+# The read side stays generous, because timing out mid-body wastes the attempt.
+REQUEST_CONNECT_TIMEOUT_SECONDS = 8
+REQUEST_READ_TIMEOUT_SECONDS = 30
+REQUEST_TIMEOUT = (REQUEST_CONNECT_TIMEOUT_SECONDS, REQUEST_READ_TIMEOUT_SECONDS)
 
 # Transport failures are retried, because a single flaky connection used to
 # fail a whole account. Safe here only because every call in these scripts is a
